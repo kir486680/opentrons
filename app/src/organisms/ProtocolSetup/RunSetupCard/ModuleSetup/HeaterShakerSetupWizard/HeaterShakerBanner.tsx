@@ -24,6 +24,7 @@ export function HeaterShakerBanner(
     <Banner title={t('attach_heater_shaker_to_deck', { name: displayName })}>
       {modules.map((module, index) => (
         <React.Fragment key={index}>
+<<<<<<< HEAD
           {wizardId === module.moduleId &&
             module.attachedModuleMatch?.moduleType ===
               HEATERSHAKER_MODULE_TYPE && (
@@ -34,6 +35,22 @@ export function HeaterShakerBanner(
               />
             )}
           {index > 0 && <Divider color={COLORS.medGreyEnabled} />}
+=======
+          {wizardId === module.moduleId && (
+            <HeaterShakerWizard
+              onCloseClick={() => setWizardId(null)}
+              moduleFromProtocol={module}
+              attachedModule={
+                module.attachedModuleMatch != null &&
+                module.attachedModuleMatch?.moduleType ===
+                  HEATERSHAKER_MODULE_TYPE
+                  ? module.attachedModuleMatch
+                  : null
+              }
+            />
+          )}
+          {index > 0 && <Divider color={COLORS.medGrey} />}
+>>>>>>> release
           <BannerItem
             title={t('module_in_slot', {
               moduleName: module.moduleDef.displayName,

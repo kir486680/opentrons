@@ -233,6 +233,7 @@ export function OverflowMenu({
           right={0}
           flexDirection={DIRECTION_COLUMN}
         >
+<<<<<<< HEAD:app/src/organisms/RobotSettingsCalibration/CalibrationDetails/OverflowMenu.tsx
           <MenuItem
             onClick={e => handleCalibration(calType, e)}
             disabled={disabledReason !== null}
@@ -243,6 +244,17 @@ export function OverflowMenu({
                 : t('calibrate_pipette')
               : t('recalibrate_tip_and_pipette')}
           </MenuItem>
+=======
+          {mount != null && (
+            <MenuItem onClick={e => handleCalibration(calType, e)}>
+              {calType === 'pipetteOffset'
+                ? applicablePipetteOffsetCal != null
+                  ? t('recalibrate_pipette')
+                  : t('calibrate_pipette')
+                : t('recalibrate_tip_and_pipette')}
+            </MenuItem>
+          )}
+>>>>>>> release:app/src/organisms/Devices/RobotSettings/CalibrationDetails/OverflowMenu.tsx
           <MenuItem onClick={e => handleDownload(calType, e)}>
             {t('download_calibration_data')}
           </MenuItem>

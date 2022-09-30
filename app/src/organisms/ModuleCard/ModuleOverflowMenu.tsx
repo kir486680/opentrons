@@ -23,6 +23,10 @@ interface ModuleOverflowMenuProps {
 export const ModuleOverflowMenu = (
   props: ModuleOverflowMenuProps
 ): JSX.Element | null => {
+<<<<<<< HEAD
+=======
+  const { t } = useTranslation(['heater_shaker'])
+>>>>>>> release
   const {
     module,
     runId,
@@ -66,10 +70,24 @@ export const ModuleOverflowMenu = (
                     key={`${index}_${module.moduleModel}`}
                     onClick={() => item.onClick(item.isSecondary)}
                     data-testid={`module_setting_${module.moduleModel}`}
+<<<<<<< HEAD
                     disabled={isDisabled}
                   >
                     {item.setSetting}
                   </MenuItem>
+=======
+                    disabled={item.disabledReason || isDisabled}
+                    whiteSpace="nowrap"
+                    {...targetProps}
+                  >
+                    {item.setSetting}
+                  </MenuItem>
+                  {item.disabledReason && (
+                    <Tooltip tooltipProps={tooltipProps}>
+                      {t('cannot_shake')}
+                    </Tooltip>
+                  )}
+>>>>>>> release
                   {item.menuButtons}
                 </React.Fragment>
               )
