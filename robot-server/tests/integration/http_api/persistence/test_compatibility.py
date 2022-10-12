@@ -1,4 +1,6 @@
 from pathlib import Path
+from shutil import copytree
+from tempfile import TemporaryDirectory
 from typing import AsyncGenerator, Generator
 
 import pytest
@@ -15,14 +17,22 @@ _EXPECTED_PROTOCOL_COUNT = 4
 _EXPECTED_RUN_COUNT = 5
 
 
+def _copy_persistence_dir() -> Path:
+    temp_dir = Path(TemporaryDirectory().name) / _OLDER_PERSISTENCE_DIR.name
+    copytree(src=_OLDER_PERSISTENCE_DIR, dst=temp_dir)
+    return temp_dir
+
+
 # Module-scope to avoid the overhead of restarting the server between test functions.
-# This relies on the test functions only reading, never writing.
 @pytest.fixture(scope="module")
 def dev_server() -> Generator[DevServer, None, None]:
     port = "15555"
     with DevServer(
         port=port,
-        persistence_directory=_OLDER_PERSISTENCE_DIR,
+        # The server might rewrite data as part of automatic schema migration.
+        # Use a copy to avoid accidentally modifying the files checked into Git,
+        # and to avoid leakage between test sessions.
+        persistence_directory=_copy_persistence_dir(),
     ) as server:
         server.start()
         yield server
