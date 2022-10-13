@@ -850,7 +850,7 @@ class OT3API(
         check_motion_bounds(to_check, target_position, bounds, check_bounds)
 
         # TODO: (2022-02-10) Use actual max speed for MoveTarget
-        checked_speed = speed or 500
+        checked_speed = speed or 400
         self._move_manager.update_constraints(
             get_system_constraints(self._config.motion_settings, self._gantry_load)
         )
@@ -1006,6 +1006,8 @@ class OT3API(
         """Move the gripper jaw inward to close."""
         try:
             await self._backend.gripper_grip_jaw(duty_cycle=duty_cycle)
+            encoder_pos = await self._backend.update_encoder_position()
+            self._encoder_current_position.update(encoder_pos)
         except Exception:
             self._log.exception("Gripper grip failed")
             raise
@@ -1015,6 +1017,8 @@ class OT3API(
         """Move the gripper jaw outward to reach the homing switch."""
         try:
             await self._backend.gripper_home_jaw()
+            encoder_pos = await self._backend.update_encoder_position()
+            self._encoder_current_position.update(encoder_pos)
         except Exception:
             self._log.exception("Gripper home failed")
             raise
@@ -1040,6 +1044,8 @@ class OT3API(
                     / 2
                 )
             )
+            encoder_pos = await self._backend.update_encoder_position()
+            self._encoder_current_position.update(encoder_pos)
         except Exception:
             self._log.exception("Gripper set width failed")
             raise
@@ -1192,7 +1198,7 @@ class OT3API(
 
     async def pick_up_tip(
         self,
-        mount: top_types.Mount,
+        mount: Union[top_types.Mount, OT3Mount],
         tip_length: float,
         presses: Optional[int] = None,
         increment: Optional[float] = None,
