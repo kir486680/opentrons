@@ -10,6 +10,7 @@ from typing_extensions import Literal
 
 from opentrons.protocol_reader import ProtocolReader, ProtocolFilesInvalidError
 
+from robot_server.analysis_models import ProtocolAnalysis
 from robot_server.errors import ErrorDetails, ErrorBody
 from robot_server.service.task_runner import TaskRunner, get_task_runner
 from robot_server.service.dependencies import get_unique_id, get_current_time
@@ -25,7 +26,6 @@ from .protocol_auto_deleter import ProtocolAutoDeleter
 from .protocol_models import Protocol, ProtocolFile, Metadata
 from .protocol_analyzer import ProtocolAnalyzer
 from .analysis_store import AnalysisStore, AnalysisNotFoundError
-from .analysis_models import ProtocolAnalysis
 from .protocol_store import (
     ProtocolStore,
     ProtocolResource,

@@ -9,7 +9,7 @@ from opentrons.protocol_reader import (
 )
 
 from robot_server.service.json_api import ResourceModel
-from .analysis_models import AnalysisSummary
+from robot_server.analysis_models import AnalysisSummary
 
 
 class ProtocolFile(BaseModel):
