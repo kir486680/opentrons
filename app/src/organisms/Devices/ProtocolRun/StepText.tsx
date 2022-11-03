@@ -79,35 +79,39 @@ export function StepText(props: Props): JSX.Element | null {
           labwareId === TRASH_ID
             ? 'Opentrons Fixed Trash'
             : getLabwareDisplayName(
-                protocolData.labwareDefinitions[
-                  protocolData.labware[labwareId].definitionId
-                ]
-              ),
+              protocolData.labwareDefinitions[
+              protocolData.labware[labwareId].definitionId
+              ]
+            ),
         labware_location: labwareLocation.slotName,
       })
       break
     }
     case 'pickUpTip': {
       const { wellName, labwareId } = displayCommand.params
-      const labwareLocation = getLabwareLocation(
-        labwareId,
-        protocolData.commands
-      )
-      if (labwareLocation === 'offDeck' || !('slotName' in labwareLocation)) {
-        throw new Error('expected tip rack to be in a slot')
-      }
+      // const labwareLocation = getLabwareLocation(
+      //   labwareId,
+      //   protocolData.commands
+      // )
+      // if (labwareLocation === 'offDeck' || !('slotName' in labwareLocation)) {
+      //   throw new Error('expected tip rack to be in a slot')
+      // }
       messageNode = t('pickup_tip', {
         well_name: wellName,
-        labware: getLabwareDisplayName(
-          labwareRenderInfoById[labwareId].labwareDef
-        ),
-        labware_location: labwareLocation.slotName,
+        // labware: getLabwareDisplayName(
+        //   labwareRenderInfoById[labwareId].labwareDef
+        // ),
+        // labware_location: labwareLocation.slotName,
       })
       break
     }
     case 'pause':
     case 'waitForResume': {
       messageNode = displayCommand.params?.message ?? t('wait_for_resume')
+      break
+    }
+    case 'moveLabware': {
+      messageNode = `Moving labware ${displayCommand.params.strategy === 'usingGripper' ? ' with gripper' : 'manually'}`
       break
     }
     case 'loadLabware':
