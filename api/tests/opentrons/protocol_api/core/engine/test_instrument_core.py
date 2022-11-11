@@ -300,6 +300,7 @@ def test_aspirate_from_well(
         ),
         mock_protocol_core.set_last_location(location=location, mount=Mount.LEFT),
     )
+    assert subject.get_current_volume() == 12.34
 
 
 def test_blow_out_to_well(
@@ -335,6 +336,7 @@ def test_blow_out_to_well(
         ),
         mock_protocol_core.set_last_location(location=location, mount=Mount.LEFT),
     )
+    assert subject.get_current_volume() == 0.0
 
 
 def test_dispense_to_well(
@@ -373,6 +375,7 @@ def test_dispense_to_well(
         ),
         mock_protocol_core.set_last_location(location=location, mount=Mount.LEFT),
     )
+    assert subject.get_current_volume() == -12.34
 
 
 def test_initialization_sets_default_movement_speed(

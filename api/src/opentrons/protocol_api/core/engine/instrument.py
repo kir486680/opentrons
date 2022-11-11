@@ -46,7 +46,7 @@ class InstrumentCore(AbstractInstrument[WellCore]):
         #   along with other rate related refactors (for the hardware API)
         self._flow_rates = FlowRates(self)
         self._flow_rates.set_defaults(MAX_SUPPORTED_VERSION)
-
+        self._current_volume = 0.0
         self.set_default_speed(speed=default_movement_speed)
 
     @property
@@ -104,7 +104,7 @@ class InstrumentCore(AbstractInstrument[WellCore]):
             volume=volume,
             flow_rate=flow_rate,
         )
-
+        self._current_volume += volume
         self._protocol_core.set_last_location(location=location, mount=self.get_mount())
 
     def dispense(
@@ -143,7 +143,7 @@ class InstrumentCore(AbstractInstrument[WellCore]):
             volume=volume,
             flow_rate=flow_rate,
         )
-
+        self._current_volume -= volume
         self._protocol_core.set_last_location(location=location, mount=self.get_mount())
 
     def blow_out(
@@ -177,7 +177,7 @@ class InstrumentCore(AbstractInstrument[WellCore]):
             #   this also needs to be refactored along with other flow rate related issues
             flow_rate=self.get_absolute_blow_out_flow_rate(1.0),
         )
-
+        self._current_volume = 0
         self._protocol_core.set_last_location(location=location, mount=self.get_mount())
 
     def touch_tip(
@@ -349,7 +349,7 @@ class InstrumentCore(AbstractInstrument[WellCore]):
         raise NotImplementedError("InstrumentCore.get_max_volume not implemented")
 
     def get_current_volume(self) -> float:
-        raise NotImplementedError("InstrumentCore.get_current_volume not implemented")
+        return self._current_volume
 
     def get_available_volume(self) -> float:
         raise NotImplementedError("InstrumentCore.get_available_volume not implemented")
