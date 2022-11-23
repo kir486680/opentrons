@@ -394,9 +394,9 @@ async def run(args: argparse.Namespace) -> None:
     calibrate = True
     trough_calibrate = True
     press = True
-    # grab_tips = move_pipette_mechanism(grap_distance, grap_speed)
-    # drop_tips = move_pipette_mechanism(drop_distance, drop_speed)
-    # home_jaw = home_pipette_jaw()
+    grab_tips = move_pipette_mechanism(grap_distance, grap_speed)
+    drop_tips = move_pipette_mechanism(drop_distance, drop_speed)
+    home_jaw = home_pipette_jaw()
     home_z = home_z_axis()
     home_gantry = home_gantry_xy()
     home_pipette = home_plunger()
