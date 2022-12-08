@@ -274,7 +274,7 @@ def getch():
         return ch
     return _getch()
 
-async def _jog_axis(messenger: CanMessenger , position) -> None:
+async def _jog_axis(messenger: CanMessenger, position) -> None:
     step_size = [0.1, 0.5, 1, 10, 20, 50]
     step_length_index = 3
     step = step_size[step_length_index]
