@@ -341,6 +341,11 @@ async def _jog_axis(messenger: CanMessenger , position) -> None:
             z_move = move_z_axis(step, z_speed)
             await z_move.run(can_messenger = messenger)
 
+        elif input == 'e':
+            sys.stdout.flush()
+            print("TEST CANCELLED")
+            quit()
+
         elif input == '+':
             sys.stdout.flush()
             step_length_index = step_length_index + 1
@@ -358,12 +363,10 @@ async def _jog_axis(messenger: CanMessenger , position) -> None:
         elif input == '\r':
             sys.stdout.flush()
             return position
-        print("Coordinates: X: {} Y: {} Z: {}".format(
-                            round(position['gantry_x'],2),
-                            round(position['gantry_y'],2),
-                            round(position['head_l'],2)),
-                            "      Motor Step: ",
-                            step_size[step_length_index],
+        print(f'Coordinates: X: {round(position['gantry_x'],2)}\
+                            Y: {round(position['gantry_y'],2)} \
+                            Z: {round(position['head_l'],2))}, \
+                            Motor Step: {step_size[step_length_index]}',
                             end='')
         print('\r', end='')
 
@@ -371,17 +374,12 @@ async def _jog_axis(messenger: CanMessenger , position) -> None:
 async def run(args: argparse.Namespace) -> None:
     """Entry point for script."""
     print("Test tip pick up for the 96 channel\n")
-    # reps = prompt_int_input("Number of repetitions for pick up and drop tip")
-    # delay = prompt_int_input("Delay in seconds between pick up and drop tip")
     delay = 0.5
     # 96 channel can only be mounted to the left
     pipette_node = NodeId.pipette_left
-
     driver = await build_driver(build_settings(args))
-
     messenger = CanMessenger(driver=driver)
     messenger.start()
-    # await messenger.send(node_id=NodeId.broadcast, message=EnableMotorRequest())
     z_speed = 10
     x_speed = 30
     y_speed = 60
@@ -403,107 +401,198 @@ async def run(args: argparse.Namespace) -> None:
     move_y = move_y_axis(332, 60)
     move_x = move_x_axis(250, 30)
     move_z = move_z_axis(pick_up_distance, z_speed)
-    input_current = float(input("Enter Current: "))
     try:
-        await home_z.run(can_messenger = messenger)
-        await asyncio.sleep(3)
-        await home_gantry.run(can_messenger = messenger)
-        await asyncio.sleep(delay)
-        if calibrate:
-            position = {'gantry_x': 0,
-                        'gantry_y': 0,
-                        'head_l': 0}
-            current_position = await _jog_axis(messenger, position)
-        else:
-            current_position = {'gantry_x': 249.7,
-                            'gantry_y': 332.7,
-                            'head_l': 151}
-            await move_y_axis(current_position['gantry_y'], y_speed).run(can_messenger = messenger)
+        #-------------------partial Pick up-------------------------------------
+        if args.test == 'partial_pick_up':
+            input_current = float(input("Enter Current: "))
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            await home_gantry.run(can_messenger = messenger)
             await asyncio.sleep(delay)
-            await move_x_axis(current_position['gantry_x'], x_speed).run(can_messenger = messenger)
-            await asyncio.sleep(delay)
-            await move_z_axis(current_position['head_l'], z_speed).run(can_messenger = messenger)
-            await asyncio.sleep(delay)
-        await set_current(messenger, input_current, NodeId.head_l)
-        await hold_current(messenger, 1.4, NodeId.gantry_y)
-        await hold_current(messenger, 1.4, NodeId.gantry_x)
-        await move_z_axis(pick_up_distance, pick_up_speed).run(can_messenger = messenger)
-        current_position['head_l'] = current_position['head_l'] + pick_up_distance
-        await asyncio.sleep(delay)
-        if press:
-            slower_speed = 1
-            await set_current(messenger, 1.5, NodeId.head_l)
-            await move_z_axis(5, -slower_speed).run(can_messenger = messenger)
-            current_position['head_l'] = current_position['head_l'] + pick_up_distance
-            await asyncio.sleep(delay)
-            await set_current(messenger, input_current+0.05, NodeId.head_l)
+            if calibrate:
+                position = {'gantry_x': 0,
+                            'gantry_y': 0,
+                            'head_l': 0}
+                current_position = await _jog_axis(messenger, position)
+            else:
+                current_position = {'gantry_x': 249.7,
+                                    'gantry_y': 332.7,
+                                    'head_l': 151}
+                await move_y_axis(current_position['gantry_y'], y_speed).run(can_messenger = messenger)
+                await asyncio.sleep(delay)
+                await move_x_axis(current_position['gantry_x'], x_speed).run(can_messenger = messenger)
+                await asyncio.sleep(delay)
+                await move_z_axis(current_position['head_l'], z_speed).run(can_messenger = messenger)
+                await asyncio.sleep(delay)
+            await set_current(messenger, input_current, NodeId.head_l)
             await hold_current(messenger, 1.4, NodeId.gantry_y)
             await hold_current(messenger, 1.4, NodeId.gantry_x)
-            await move_z_axis(5+2, slower_speed).run(can_messenger = messenger)
+            await move_z_axis(pick_up_distance, pick_up_speed).run(can_messenger = messenger)
             current_position['head_l'] = current_position['head_l'] + pick_up_distance
             await asyncio.sleep(delay)
-        await home_z.run(can_messenger = messenger)
-        await asyncio.sleep(3)
-        # set current for plunger
-        await set_current(messenger, 2.2,NodeId.pipette_left)
-        await home_pipette.run(can_messenger = messenger)
-        await asyncio.sleep(delay)
-        # set current for plunger
-        await set_current(messenger, 1.5,NodeId.pipette_left)
-        # prepare for aspirate
-        await move_plunger(63 ,5).run(can_messenger = messenger)
-        await asyncio.sleep(delay)
-        current_position['head_l'] = 0
-        if trough_calibrate:
-            trough_pos = await _jog_axis(messenger, current_position)
-        else:
-            current_position = {'gantry_x': 251.9,
-                            'gantry_y': 329.2,
-                            'head_l': 151}
-        # Aspirate
-        await move_plunger(60, -5).run(can_messenger = messenger)
-        await asyncio.sleep(delay)
-        await home_z.run(can_messenger = messenger)
-        await asyncio.sleep(3)
-        input('Press Enter to continue!!')
-        await move_z_axis(trough_pos['head_l'], z_speed).run(can_messenger = messenger)
-        # Dispense + Blow out
-        await asyncio.sleep(delay)
-        await move_plunger(65, 5).run(can_messenger = messenger)
-        await asyncio.sleep(delay)
-        await home_z.run(can_messenger = messenger)
-        await asyncio.sleep(3)
-        await set_current(messenger, 2.2,NodeId.pipette_left)
-        await home_pipette.run(can_messenger = messenger)
-        await asyncio.sleep(delay)
-        # await move_y.run(can_messenger = messenger)
-        # await asyncio.sleep(delay)
-        # await move_x.run(can_messenger = messenger)
-        # await asyncio.sleep(delay)
-        # await move_z.run(can_messenger = messenger)
-        # await asyncio.sleep(delay)
-        # await set_current(messenger,1.5)
-        # # Home the gear motors and Z before performing the test
-        # await home_jaw.run(can_messenger=messenger)
-        # await asyncio.sleep(delay)
-        # # await drop_tips.run(can_messenger=messenger)
-        # # await asyncio.sleep(delay)
-        # await home_z.run(can_messenger = messenger)
-        # await asyncio.sleep(delay)
-        # await move_z.run(can_messenger = messenger)
-        # await asyncio.sleep(delay)
-        # await grab_tips.run(can_messenger=messenger)
-        # await asyncio.sleep(delay)
-        # await home_jaw.run(can_messenger=messenger)
-        # await asyncio.sleep(delay)
-        # await home_z.run(can_messenger = messenger)
-        # await asyncio.sleep(delay)
-        # input("press enter to drop tip")
-        # await drop_tips.run(can_messenger=messenger)
-        # await asyncio.sleep(delay)
-        # await home_jaw.run(can_messenger=messenger)
-        # await asyncio.sleep(delay)
+            if press:
+                slower_speed = 1
+                await set_current(messenger, 1.5, NodeId.head_l)
+                await move_z_axis(5, -slower_speed).run(can_messenger = messenger)
+                current_position['head_l'] = current_position['head_l'] + pick_up_distance
+                await asyncio.sleep(delay)
+                await set_current(messenger, input_current+0.05, NodeId.head_l)
+                await hold_current(messenger, 1.4, NodeId.gantry_y)
+                await hold_current(messenger, 1.4, NodeId.gantry_x)
+                await move_z_axis(5+2, slower_speed).run(can_messenger = messenger)
+                current_position['head_l'] = current_position['head_l'] + pick_up_distance
+                await asyncio.sleep(delay)
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            # set current for plunger
+            await set_current(messenger, 2.2,NodeId.pipette_left)
+            await home_pipette.run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            # set current for plunger
+            await set_current(messenger, 1.5,NodeId.pipette_left)
+            # prepare for aspirate
+            await move_plunger(63 ,5).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            current_position['head_l'] = 0
+            if trough_calibrate:
+                trough_pos = await _jog_axis(messenger, current_position)
+            else:
+                current_position = {'gantry_x': 251.9,
+                                'gantry_y': 329.2,
+                                'head_l': 151}
+            # Aspirate
+            await move_plunger(60, -5).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            input('Press Enter to continue!!')
+            await move_z_axis(trough_pos['head_l'], z_speed).run(can_messenger = messenger)
+            # Dispense + Blow out
+            await asyncio.sleep(delay)
+            await move_plunger(65, 5).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            await set_current(messenger, 2.2,NodeId.pipette_left)
+            await home_pipette.run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+        #-------------------Pick up tip Motors----------------------------------
+        elif args.test == 'full_pick_up_tip':
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            await home_gantry.run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await set_current(messenger, 1.5,NodeId.pipette_left)
+            await home_pipette.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            await home_jaw.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            if calibrate:
+                position = {'gantry_x': 0,
+                            'gantry_y': 0,
+                            'head_l': 0}
+                tiprack_pos = await _jog_axis(messenger, position)
+            await grab_tips.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            await home_jaw.run(can_messenger=messenger)
+            await asyncio.sleep(8)
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(10)
+            # Prepare for aspirate
+            await move_plunger(66, 10).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            if trough_calibrate:
+                position = {'gantry_x': tiprack_pos['gantry_x'],
+                            'gantry_y': tiprack_pos['gantry_y'],
+                            'head_l': 0}
+                trough_pos = await _jog_axis(messenger, position)
+            else:
+                trough_pos = {'gantry_x': 251.9,
+                                'gantry_y': 329.2,
+                                'head_l': 151}
+            input('Press Enter to Aspirate')
+            # Aspirate
+            await move_plunger(64, -10).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            input('Press Enter to Dispense!!')
+            await move_z_axis(trough_pos['head_l'], z_speed).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            # Dispense + Blow out
+            await move_plunger(71, 10).run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            await home_pipette.run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await drop_tips.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            await home_jaw.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            # await move_y.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
+            # await move_x.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
+            # await move_z.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
+            # await set_current(messenger,1.5)
+            # Home the gear motors and Z before performing the test
+            # await home_jaw.run(can_messenger=messenger)
+            # await asyncio.sleep(delay)
+            # await drop_tips.run(can_messenger=messenger)
+            # await asyncio.sleep(delay)
+            # await home_z.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
+            # await move_z.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
+            # await grab_tips.run(can_messenger=messenger)
+            # await asyncio.sleep(delay)
+            # await home_jaw.run(can_messenger=messenger)
+            # await asyncio.sleep(delay)
+            # await home_z.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
+            # input("press enter to drop tip")
+            # await drop_tips.run(can_messenger=messenger)
+            # await asyncio.sleep(delay)
+            # await home_jaw.run(can_messenger=messenger)
+            # await asyncio.sleep(delay)
 
+        elif args.test == 'aspirate/dispense':
+            for cycle in range(1, args.cycles+1):
+                await home_z.run(can_messenger = messenger)
+                await asyncio.sleep(3)
+                await home_gantry.run(can_messenger = messenger)
+                await asyncio.sleep(delay)
+                await set_current(messenger, 1.5,NodeId.pipette_left)
+                await home_pipette.run(can_messenger=messenger)
+                await asyncio.sleep(delay)
+                await home_jaw.run(can_messenger=messenger)
+                await asyncio.sleep(delay)
+                # full travel of the plunger is 71mm
+                # Prepare for aspirate
+                await move_plunger(66,10).run(can_messenger = messenger)
+                await asyncio.sleep(delay)
+                input('Press Enter to Aspirate')
+                # Aspirate
+                await move_plunger(64, -10).run(can_messenger = messenger)
+                await asyncio.sleep(delay)
+                input('Press Enter to Dispense!!')
+                # Dispense + Blow out
+                await asyncio.sleep(delay)
+                await move_plunger(71, 10).run(can_messenger = messenger)
+
+        elif args.test =='drop_tip':
+            await home_z.run(can_messenger = messenger)
+            await asyncio.sleep(3)
+            await home_pipette.run(can_messenger = messenger)
+            await asyncio.sleep(delay)
+            await home_jaw.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            await drop_tips.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
+            await home_jaw.run(can_messenger=messenger)
+            await asyncio.sleep(delay)
     except asyncio.CancelledError:
         pass
     finally:
@@ -547,7 +636,54 @@ def main() -> None:
         description="96 channel tip handling testing script."
     )
     add_can_args(parser)
-
+    parser.add_argument(
+        "--z_run_current",
+        type=float,
+        help="Active current of the plunger",
+        default=1.5,
+    )
+    parser.add_argument(
+        "--z_hold_current",
+        type=float,
+        help="Dwell current of the plunger",
+        default=0.8,
+    )
+    parser.add_argument(
+        "--plunger_run_current",
+        type=float,
+        help="Active current of the plunger",
+        default=1.5,
+    )
+    parser.add_argument(
+        "--plunger_hold_current",
+        type=float,
+        help="Active current of the plunger",
+        default=1.5,
+    )
+    parser.add_argument(
+        "--speed",
+        type=float,
+        help="The speed with which to move the plunger",
+        default=10.5,
+    )
+    parser.add_argument(
+        "--cycles",
+        type=float,
+        help="The speed with which to move the plunger",
+        default=20,
+    )
+    parser.add_argument(
+        "--distance",
+        type=float,
+        help="The distance in mm to move the plunger",
+        default=30,
+    )
+    parser.add_argument(
+        "--test",
+        type=str,
+        help="partial_pick_up, full_pick_up, aspirate/dispense",
+        default="partial_pick_up",
+    )
     args = parser.parse_args()
 
     asyncio.run(run(args))
