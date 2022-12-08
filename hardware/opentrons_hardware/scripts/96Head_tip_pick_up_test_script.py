@@ -259,6 +259,10 @@ def home_plunger():
     return home_plunger_runner
 
 def getch():
+    """
+        fd: file descriptor stdout, stdin, stderr
+        This functions gets a single input keyboard character from the user
+    """
     def _getch():
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -290,8 +294,8 @@ async def _jog_axis(messenger: CanMessenger , position) -> None:
         Click  >>   +   << to Increase the length of each step
         Click  >>   -   << to decrease the length of each step
         Click  >> Enter << to save position
-        Click  >> ESC << to quit the test script
-            """
+        Click  >> q << to quit the test script
+                    """
     print(information_str)
     while True:
         input = getch()
@@ -341,7 +345,7 @@ async def _jog_axis(messenger: CanMessenger , position) -> None:
             z_move = move_z_axis(step, z_speed)
             await z_move.run(can_messenger = messenger)
 
-        elif input == 'e':
+        elif input == 'q':
             sys.stdout.flush()
             print("TEST CANCELLED")
             quit()
@@ -593,6 +597,8 @@ async def run(args: argparse.Namespace) -> None:
             await asyncio.sleep(delay)
             await home_jaw.run(can_messenger=messenger)
             await asyncio.sleep(delay)
+        else:
+            raise('Test Not Recognized!!!! Check the Spelling')
     except asyncio.CancelledError:
         pass
     finally:
@@ -664,7 +670,7 @@ def main() -> None:
         "--speed",
         type=float,
         help="The speed with which to move the plunger",
-        default=10.5,
+        default=10.0,
     )
     parser.add_argument(
         "--cycles",
