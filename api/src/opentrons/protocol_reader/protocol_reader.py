@@ -5,6 +5,9 @@ from typing_extensions import Literal
 import json
 
 import anyio
+import pydantic
+
+from opentrons.protocols.models import LabwareDefinition
 
 from .input_file import AbstractInputFile
 from .file_reader_writer import FileReaderWriter, FileReadError
@@ -12,6 +15,7 @@ from .role_analyzer import RoleAnalyzer, RoleAnalysisFile, RoleAnalysisError
 from .config_analyzer import ConfigAnalyzer, ConfigAnalysis, ConfigAnalysisError
 from .protocol_source import (
     JsonProtocolConfig,
+    LabwareDefinitionsReference,
     Metadata,
     ProtocolSource,
     ProtocolSourceFile,
@@ -25,9 +29,31 @@ class ProtocolFilesInvalidError(ValueError):
 
 class MainFileInfo(NamedTuple):
     path: Path
+    unvalidated_contents: Dict[str, Any]
     schema_version: int
     metadata: Metadata
     robot_type: Literal["OT-2 Standard", "OT-3 Standard"]
+
+
+class TrivialLabwareDefinitionsReference(LabwareDefinitionsReference):
+    def __init__(self, labware_definitions: List[LabwareDefinition]) -> None:
+        self._labware_definitions = labware_definitions
+
+    async def extract(self) -> List[LabwareDefinition]:
+        return self._labware_definitions
+
+
+class JSONParsingLabwareDefinitionsReference(LabwareDefinitionsReference):
+    def __init__(self, unvalidated_json_protocol: Dict[str, Any]) -> None:
+        self._unvalidated_json_protocol = unvalidated_json_protocol
+
+    async def extract(self) -> List[LabwareDefinition]:
+        async def validate_definition(unvalidated_definition: Dict[str, Any]) -> LabwareDefinition:
+            # TODO: Does this handle aliases properly? Who knows.
+            return await anyio.to_thread.run_sync(LabwareDefinition.parse_obj, unvalidated_definition)
+
+        unvalidated_definitions = self._unvalidated_json_protocol["labware_definitions"]
+        return [await validate_definition(unvalidated_definition) for unvalidated_definition in unvalidated_definitions]
 
 
 class ProtocolReader:
@@ -94,7 +120,7 @@ class ProtocolReader:
             config=config_analysis.config,
             metadata=config_analysis.metadata,
             robot_type=config_analysis.robot_type,
-            labware_definitions=role_analysis.labware_definitions,
+            labware_definitions=TrivialLabwareDefinitionsReference(role_analysis.labware_definitions),
         )
 
     async def read_saved(
@@ -146,7 +172,7 @@ class ProtocolReader:
             config=config_analysis.config,
             metadata=config_analysis.metadata,
             robot_type=config_analysis.robot_type,
-            labware_definitions=role_analysis.labware_definitions,
+            labware_definitions=TrivialLabwareDefinitionsReference(role_analysis.labware_definitions),
         )
 
     async def read_saved_prevalidated(
@@ -164,17 +190,20 @@ class ProtocolReader:
         main_file_info: Optional[MainFileInfo] = None
         protocol_source_files: List[ProtocolSourceFile] = []
 
-        for file_path in files:
-            if not file_path.name.lower().endswith(".json"):
-                raise NotImplementedError(
-                    ".py and other files aren't supported in this proof of concept."
-                )
+        if any(file_path.name.lower().endswith(".py") for file_path in files):
+            # Parse Python protocols the old way.
+            return await self.read_saved(files=files, directory=directory)
 
-            def sync_read_json() -> Dict[str, Any]:
+        for file_path in files:
+            assert file_path.name.lower().endswith(".json"), f"{file_path} doesn't seem like a JSON file?"
+
+            def sync_read_and_parse_json() -> Dict[str, Any]:
+                # Note: I'm hoping parsing directly from a file instead of slurping into
+                # a string makes this more memory- and compute-efficient.
                 with file_path.open(mode="rb") as opened_file:
                     return json.load(opened_file)  # type: ignore[no-any-return]
 
-            json_contents = await anyio.to_thread.run_sync(sync_read_json)
+            json_contents = await anyio.to_thread.run_sync(sync_read_and_parse_json)
 
             try:
                 looks_like_protocol = json_contents["$otSharedSchema"].startswith(
@@ -191,6 +220,7 @@ class ProtocolReader:
                 robot_type = json_contents["robot"]["model"]
                 main_file_info = MainFileInfo(
                     path=file_path,
+                    unvalidated_contents=json_contents,
                     schema_version=schema_version,
                     metadata=metadata,
                     robot_type=robot_type,
@@ -217,5 +247,5 @@ class ProtocolReader:
             config=JsonProtocolConfig(schema_version=main_file_info.schema_version),
             # TODO: This is wrong right now. But can we avoid thinking about this
             # by removing labware_definitions from ProtocolSource?
-            labware_definitions=[],
+            labware_definitions=JSONParsingLabwareDefinitionsReference(unvalidated_json_protocol=main_file_info.unvalidated_contents),
         )

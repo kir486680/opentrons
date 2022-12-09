@@ -89,7 +89,7 @@ class ProtocolRunner:
         """
         return self._protocol_engine.state_view.commands.has_been_played()
 
-    def load(self, protocol_source: ProtocolSource) -> None:
+    async def load(self, protocol_source: ProtocolSource) -> None:
         """Load a ProtocolSource into managed ProtocolEngine.
 
         Calling this method is only necessary if the runner will be used
@@ -97,9 +97,7 @@ class ProtocolRunner:
         """
         config = protocol_source.config
 
-        # TODO: Here is where a ProtocolSource's labware definitions are used.
-        # Maybe make this part do the file reading and parsing?
-        for definition in protocol_source.labware_definitions:
+        for definition in await protocol_source.labware_definitions.extract():
             self._protocol_engine.add_labware_definition(definition)
 
         if isinstance(config, JsonProtocolConfig):
@@ -108,7 +106,7 @@ class ProtocolRunner:
             if schema_version >= LEGACY_JSON_SCHEMA_VERSION_CUTOFF:
                 self._load_json(protocol_source)
             else:
-                self._load_legacy(protocol_source)
+                await self._load_legacy(protocol_source)
 
         elif isinstance(config, PythonProtocolConfig):
             api_version = config.api_version
@@ -116,7 +114,7 @@ class ProtocolRunner:
             if api_version >= LEGACY_PYTHON_API_VERSION_CUTOFF:
                 self._load_python(protocol_source)
             else:
-                self._load_legacy(protocol_source)
+                await self._load_legacy(protocol_source)
 
     def play(self) -> None:
         """Start or resume the run."""
@@ -144,7 +142,7 @@ class ProtocolRunner:
         # TODO(mc, 2022-01-11): move load to runner creation, remove from `run`
         # currently `protocol_source` arg is only used by tests
         if protocol_source:
-            self.load(protocol_source)
+            await self.load(protocol_source)
 
         await self._hardware_api.home()
         self.play()
@@ -177,11 +175,11 @@ class ProtocolRunner:
             context=context,
         )
 
-    def _load_legacy(
+    async def _load_legacy(
         self,
         protocol_source: ProtocolSource,
     ) -> None:
-        protocol = self._legacy_file_reader.read(protocol_source)
+        protocol = await self._legacy_file_reader.read(protocol_source)
         broker = None
         equipment_broker = None
 

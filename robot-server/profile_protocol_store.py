@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-import yappi
+# import yappi
 
 from opentrons.protocol_reader import ProtocolReader
 from robot_server.persistence.database import create_sql_engine
@@ -41,13 +41,13 @@ def main():
             _log.info(f"Parsing {json_file}")
             json.loads(json_file.read_text(encoding="utf-8"))["metadata"]
 
-    # cProfile.runctx("asyncio.run(rehydrate())", globals(), locals(), filename=RESULTS_FILE)
+    cProfile.runctx("asyncio.run(rehydrate())", globals(), locals())
     # cProfile.runctx("parse_as_basic_json()", globals(), locals(), filename=RESULTS_FILE)
 
-    yappi.set_clock_type("WALL")
-    with yappi.run():
-        asyncio.run(rehydrate())
-    yappi.get_func_stats().save(RESULTS_FILE, type="pstat")
+    # yappi.set_clock_type("WALL")
+    # with yappi.run():
+    #     asyncio.run(rehydrate())
+    # yappi.get_func_stats().save(RESULTS_FILE, type="pstat")
 
 
 main()

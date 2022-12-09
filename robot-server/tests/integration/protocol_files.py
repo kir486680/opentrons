@@ -10,7 +10,23 @@ def get_protocol(
 ) -> str:
     """A NamedTemporaryFile valid json protocol."""
     contents = ""
-    with open(Path(f"./tests/integration/protocols/simple{protocol_extension}")) as f:
+    if protocol_extension == ".py":
+        path = "./tests/integration/protocols/simple.py"
+    else:
+        # TODO: The old implementation of this test helper appears to be
+        # uploading a v3 JSON protocol file, which I'm not sure the server even supports
+        # anymore? It breaks my proof of concept because $otSharedSchema doesn't exist
+        # in v3 protocol files.
+        #
+        # If the server supports v3 protocols still, we need to find a better heuristic
+        # for detecting protocol files. opentrons.parse might already have a helper for
+        # that.
+        #
+        # If the server doesn't support v3 protocols anymore, we should figure out
+        # why it hasn't been rejecting this file, and we'll need to update this test
+        # helper.
+        path = "./tests/integration/protocols/simple_v6.json"
+    with open(Path(path)) as f:
         contents = f.read()
         contents = contents.replace(
             '"protocolName": "simple"', f'"protocolName": "{protocol_name}"'

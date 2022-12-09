@@ -1,4 +1,5 @@
 """Protocol source value objects."""
+from abc import ABC
 from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,6 +89,11 @@ Metadata must be a simple JSON-serializable dictionary.
 """
 
 
+class LabwareDefinitionsReference(ABC):
+    async def extract(self) -> List[LabwareDefinition]:
+        pass
+
+
 @dataclass(frozen=True)
 class ProtocolSource:
     """A value object representing a protocol and its source files on disk.
@@ -116,4 +122,4 @@ class ProtocolSource:
     # TODO(mm, 2022-10-21): Make this an enum once we figure out where to put it.
     robot_type: Literal["OT-2 Standard", "OT-3 Standard"]
     config: ProtocolConfig
-    labware_definitions: List[LabwareDefinition]
+    labware_definitions: LabwareDefinitionsReference
