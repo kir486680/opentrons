@@ -97,6 +97,8 @@ class ProtocolRunner:
         """
         config = protocol_source.config
 
+        # TODO: Here is where a ProtocolSource's labware definitions are used.
+        # Maybe make this part do the file reading and parsing?
         for definition in protocol_source.labware_definitions:
             self._protocol_engine.add_labware_definition(definition)
 

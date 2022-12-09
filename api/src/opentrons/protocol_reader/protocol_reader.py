@@ -1,16 +1,33 @@
 """Read relevant protocol information from a set of files."""
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, NamedTuple
+from typing_extensions import Literal
+import json
+
+import anyio
 
 from .input_file import AbstractInputFile
 from .file_reader_writer import FileReaderWriter, FileReadError
 from .role_analyzer import RoleAnalyzer, RoleAnalysisFile, RoleAnalysisError
-from .config_analyzer import ConfigAnalyzer, ConfigAnalysisError
-from .protocol_source import ProtocolSource, ProtocolSourceFile
+from .config_analyzer import ConfigAnalyzer, ConfigAnalysis, ConfigAnalysisError
+from .protocol_source import (
+    JsonProtocolConfig,
+    Metadata,
+    ProtocolSource,
+    ProtocolSourceFile,
+    ProtocolFileRole,
+)
 
 
 class ProtocolFilesInvalidError(ValueError):
     """An error raised if the input files cannot be read to a protocol."""
+
+
+class MainFileInfo(NamedTuple):
+    path: Path
+    schema_version: int
+    metadata: Metadata
+    robot_type: Literal["OT-2 Standard", "OT-3 Standard"]
 
 
 class ProtocolReader:
@@ -130,4 +147,75 @@ class ProtocolReader:
             metadata=config_analysis.metadata,
             robot_type=config_analysis.robot_type,
             labware_definitions=role_analysis.labware_definitions,
+        )
+
+    async def read_saved_prevalidated(
+        self,
+        files: Sequence[Path],
+        directory: Optional[Path],
+    ) -> ProtocolSource:
+        """Like `read_saved()`, except faster.
+
+        This assumes that all files are already validated via a prior call to
+        `read_and_save()`.
+        """
+        # TODO: In real code, we'd probably not want this logic to live in this file.
+
+        main_file_info: Optional[MainFileInfo] = None
+        protocol_source_files: List[ProtocolSourceFile] = []
+
+        for file_path in files:
+            if not file_path.name.lower().endswith(".json"):
+                raise NotImplementedError(
+                    ".py and other files aren't supported in this proof of concept."
+                )
+
+            def sync_read_json() -> Dict[str, Any]:
+                with file_path.open(mode="rb") as opened_file:
+                    return json.load(opened_file)  # type: ignore[no-any-return]
+
+            json_contents = await anyio.to_thread.run_sync(sync_read_json)
+
+            try:
+                looks_like_protocol = json_contents["$otSharedSchema"].startswith(
+                    "#/protocol/schemas"
+                )
+            except KeyError:
+                looks_like_protocol = False
+
+            if looks_like_protocol:
+                assert main_file_info is None, "Multiple main files?"
+                # Do minimal data extraction without deep validation:
+                schema_version: int = json_contents["schemaVersion"]
+                metadata: Metadata = json_contents["metadata"]
+                robot_type = json_contents["robot"]["model"]
+                main_file_info = MainFileInfo(
+                    path=file_path,
+                    schema_version=schema_version,
+                    metadata=metadata,
+                    robot_type=robot_type,
+                )
+                protocol_source_files.append(
+                    ProtocolSourceFile(path=file_path, role=ProtocolFileRole.MAIN)
+                )
+            else:
+                # This file doesn't look like a protocol, so assume it's a labware def.
+                # TODO: Look at some heuristic fields to be more sure that this is a
+                # legit labware file.
+                protocol_source_files.append(
+                    ProtocolSourceFile(path=file_path, role=ProtocolFileRole.LABWARE)
+                )
+
+        assert main_file_info is not None, "No main files?"
+
+        return ProtocolSource(
+            directory=directory,
+            main_file=main_file_info.path,
+            files=protocol_source_files,
+            metadata=main_file_info.metadata,
+            robot_type=main_file_info.robot_type,
+            config=JsonProtocolConfig(schema_version=main_file_info.schema_version),
+            # TODO: This is wrong right now. But can we avoid thinking about this
+            # by removing labware_definitions from ProtocolSource?
+            labware_definitions=[],
         )
