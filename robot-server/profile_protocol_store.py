@@ -4,7 +4,6 @@ import json
 import logging
 from pathlib import Path
 
-# import yappi
 
 from opentrons.protocol_reader import ProtocolReader
 from robot_server.persistence.database import create_sql_engine
@@ -13,11 +12,12 @@ from robot_server.service import initialize_logging
 
 
 # Change me if running locally on dev server!
-PERSISTENCE_DIRECTORY = Path("/Users/maxpm/Downloads/cytotronics_opentrons_robot_server")
+PERSISTENCE_DIRECTORY = Path("/data/cytotronics_opentrons_robot_server")
 _DATABASE_PATH = PERSISTENCE_DIRECTORY / "robot_server.db"
 _PROTOCOLS_DIRECTORY = PERSISTENCE_DIRECTORY / "protocols"
 
 RESULTS_FILE = "profile_results.prof"
+
 
 _log = logging.getLogger(__name__)
 
@@ -42,12 +42,6 @@ def main():
             json.loads(json_file.read_text(encoding="utf-8"))["metadata"]
 
     cProfile.runctx("asyncio.run(rehydrate())", globals(), locals())
-    # cProfile.runctx("parse_as_basic_json()", globals(), locals(), filename=RESULTS_FILE)
-
-    # yappi.set_clock_type("WALL")
-    # with yappi.run():
-    #     asyncio.run(rehydrate())
-    # yappi.get_func_stats().save(RESULTS_FILE, type="pstat")
 
 
 main()
