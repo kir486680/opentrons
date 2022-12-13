@@ -367,11 +367,16 @@ async def _jog_axis(messenger: CanMessenger, position) -> None:
         elif input == '\r':
             sys.stdout.flush()
             return position
-        print(f'Coordinates: X: {round(position['gantry_x'],2)}\
-                            Y: {round(position['gantry_y'],2)} \
-                            Z: {round(position['head_l'],2))}, \
-                            Motor Step: {step_size[step_length_index]}',
-                            end='')
+        print('Coordinates: ', round(position['gantry_x'], 2), ',',
+                                round(position['gantry_y'], 2), ',',
+                                round(position['head_l'], 2), ' Motor Step: ',
+                                step_size[step_length_index],
+                                end = '')
+        # print(f'Coordinates: X: {round(position['gantry_x'], 2)}\
+        #                     Y: {round(position['gantry_y'], 2)} \
+        #                     Z: {round(position['head_l'], 2)}, \
+        #                     Motor Step: {step_size[step_length_index]}',
+        #                     end='')
         print('\r', end='')
 
 
@@ -489,6 +494,7 @@ async def run(args: argparse.Namespace) -> None:
             await set_current(messenger, 1.5,NodeId.pipette_left)
             await home_pipette.run(can_messenger=messenger)
             await asyncio.sleep(delay)
+            input("Press Enter to continue")
             await home_jaw.run(can_messenger=messenger)
             await asyncio.sleep(delay)
             if calibrate:
@@ -502,7 +508,7 @@ async def run(args: argparse.Namespace) -> None:
             await asyncio.sleep(8)
             await home_z.run(can_messenger = messenger)
             await asyncio.sleep(10)
-            # Prepare for aspirate
+            # Prepare for aspirate --bottom
             await move_plunger(66, 10).run(can_messenger = messenger)
             await asyncio.sleep(delay)
             if trough_calibrate:
@@ -564,15 +570,15 @@ async def run(args: argparse.Namespace) -> None:
 
         elif args.test == 'aspirate/dispense':
             for cycle in range(1, args.cycles+1):
-                await home_z.run(can_messenger = messenger)
+                #await home_z.run(can_messenger = messenger)
                 await asyncio.sleep(3)
-                await home_gantry.run(can_messenger = messenger)
+                #await home_gantry.run(can_messenger = messenger)
                 await asyncio.sleep(delay)
                 await set_current(messenger, 1.5,NodeId.pipette_left)
                 await home_pipette.run(can_messenger=messenger)
                 await asyncio.sleep(delay)
-                await home_jaw.run(can_messenger=messenger)
-                await asyncio.sleep(delay)
+                #await home_jaw.run(can_messenger=messenger)
+                #await asyncio.sleep(delay)
                 # full travel of the plunger is 71mm
                 # Prepare for aspirate
                 await move_plunger(66,10).run(can_messenger = messenger)
@@ -585,6 +591,7 @@ async def run(args: argparse.Namespace) -> None:
                 # Dispense + Blow out
                 await asyncio.sleep(delay)
                 await move_plunger(71, 10).run(can_messenger = messenger)
+                input("Press Enter to Home")
 
         elif args.test =='drop_tip':
             await home_z.run(can_messenger = messenger)
