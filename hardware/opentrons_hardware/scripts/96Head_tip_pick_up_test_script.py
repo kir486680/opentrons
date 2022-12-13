@@ -503,9 +503,9 @@ async def run(args: argparse.Namespace) -> None:
                             'head_l': 0}
                 tiprack_pos = await _jog_axis(messenger, position)
             await grab_tips.run(can_messenger=messenger)
-            await asyncio.sleep(delay)
+            await asyncio.sleep(5)
             await home_jaw.run(can_messenger=messenger)
-            await asyncio.sleep(8)
+            await asyncio.sleep(10)
             await home_z.run(can_messenger = messenger)
             await asyncio.sleep(10)
             # Prepare for aspirate --bottom
