@@ -767,6 +767,7 @@ class ModuleView(HasState[ModuleState]):
         ]
         hs_restrictors = [
             HeaterShakerMovementRestrictors(
+                module_id=substate.module_id,
                 plate_shaking=substate.is_plate_shaking,
                 latch_closed=substate.is_labware_latch_closed,
                 deck_slot=int(self.get_location(substate.module_id).slotName),

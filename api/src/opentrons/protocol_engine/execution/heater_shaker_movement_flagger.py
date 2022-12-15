@@ -1,5 +1,6 @@
 """Helpers for flagging unsafe movements around a Heater-Shaker Module."""
 
+import logging
 from typing import List, Optional
 
 from opentrons.motion_planning.adjacent_slots_getters import (
@@ -17,6 +18,8 @@ from ..types import HeaterShakerMovementRestrictors, LabwareLocation, ModuleLoca
 from ...hardware_control import HardwareControlAPI
 from ...hardware_control.modules import HeaterShaker as HardwareHeaterShaker
 from ...drivers.types import HeaterShakerLabwareLatchStatus
+
+log = logging.getLogger(__name__)
 
 
 class HeaterShakerMovementFlagger:
@@ -139,6 +142,7 @@ class HeaterShakerMovementFlagger:
     ) -> None:
         """Flag restricted movement around/to a Heater-Shaker."""
         for hs_movement_restrictor in hs_movement_restrictors:
+            log.info(f"H/S movement restrictors: {hs_movement_restrictor}")
             dest_east_west = destination_slot in get_east_west_slots(
                 hs_movement_restrictor.deck_slot
             )

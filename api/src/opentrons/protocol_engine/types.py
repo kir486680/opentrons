@@ -421,3 +421,4 @@ class HeaterShakerMovementRestrictors:
     plate_shaking: bool
     latch_closed: bool
     deck_slot: int
+    module_id: str
