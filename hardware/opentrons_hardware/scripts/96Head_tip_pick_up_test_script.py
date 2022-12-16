@@ -274,7 +274,7 @@ def getch():
         return ch
     return _getch()
 
-async def _jog_axis(messenger: CanMessenger, position) -> None:
+async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
     step_size = [0.1, 0.5, 1, 10, 20, 50]
     step_length_index = 3
     step = step_size[step_length_index]
@@ -299,7 +299,7 @@ async def _jog_axis(messenger: CanMessenger, position) -> None:
     print(information_str)
     while True:
         input = getch()
-        if input == 'a':
+        if not only_z and input == 'a':
             # minus x direction
             sys.stdout.flush()
             x_pos = x_pos + step
@@ -307,7 +307,7 @@ async def _jog_axis(messenger: CanMessenger, position) -> None:
             x_move = move_x_axis(step, x_speed)
             await x_move.run(can_messenger = messenger)
 
-        elif input == 'd':
+        elif not only_z and input == 'd':
             #plus x direction
             sys.stdout.flush()
             x_pos = x_pos - step
@@ -315,7 +315,7 @@ async def _jog_axis(messenger: CanMessenger, position) -> None:
             x_move = move_x_axis(step, -x_speed)
             await x_move.run(can_messenger = messenger)
 
-        elif input == 'w':
+        elif not only_z and input == 'w':
             #minus y direction
             sys.stdout.flush()
             y_pos = y_pos - step
@@ -323,7 +323,7 @@ async def _jog_axis(messenger: CanMessenger, position) -> None:
             y_move = move_y_axis(step, -y_speed)
             await y_move.run(can_messenger = messenger)
 
-        elif input == 's':
+        elif not only_z and input == 's':
             #plus y direction
             sys.stdout.flush()
             y_pos = y_pos + step
@@ -489,8 +489,8 @@ async def run(args: argparse.Namespace) -> None:
         elif args.test == 'full_pick_up_tip':
             await home_z.run(can_messenger = messenger)
             await asyncio.sleep(3)
-            await home_gantry.run(can_messenger = messenger)
-            await asyncio.sleep(delay)
+            # await home_gantry.run(can_messenger = messenger)
+            # await asyncio.sleep(delay)
             await set_current(messenger, 1.5,NodeId.pipette_left)
             await home_pipette.run(can_messenger=messenger)
             await asyncio.sleep(delay)
@@ -501,7 +501,7 @@ async def run(args: argparse.Namespace) -> None:
                 position = {'gantry_x': 0,
                             'gantry_y': 0,
                             'head_l': 0}
-                tiprack_pos = await _jog_axis(messenger, position)
+                tiprack_pos = await _jog_axis(messenger, position, only_z=True)
             await grab_tips.run(can_messenger=messenger)
             await asyncio.sleep(5)
             await home_jaw.run(can_messenger=messenger)
@@ -517,7 +517,7 @@ async def run(args: argparse.Namespace) -> None:
                 position = {'gantry_x': tiprack_pos['gantry_x'],
                             'gantry_y': tiprack_pos['gantry_y'],
                             'head_l': 0}
-                trough_pos = await _jog_axis(messenger, position)
+                trough_pos = await _jog_axis(messenger, position, only_z=True)
             else:
                 trough_pos = {'gantry_x': 251.9,
                                 'gantry_y': 329.2,
@@ -530,16 +530,17 @@ async def run(args: argparse.Namespace) -> None:
             plunger_speed = round(aspirate_distance_mm / 3, 1)
             await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger = messenger)
             await asyncio.sleep(delay)
-            plate_pos = await _jog_axis(messenger, trough_pos)
+            plate_pos = await _jog_axis(messenger, trough_pos, only_z=True)
             input('Press Enter to Dispense!!')
             # Dispense + Blow out
             await move_plunger(dispense_distance_mm, plunger_speed).run(can_messenger = messenger)
             await asyncio.sleep(delay)
+            await _jog_axis(messenger, trough_pos, only_z=True)
+            await asyncio.sleep(delay)
+            input('Press ENTER to home Z axis')
             await home_z.run(can_messenger = messenger)
             await asyncio.sleep(3)
             input('Press Enter to Drop Tips!!')
-            await home_pipette.run(can_messenger = messenger)
-            await asyncio.sleep(delay)
             await drop_tips.run(can_messenger=messenger)
             await asyncio.sleep(delay)
             await home_jaw.run(can_messenger=messenger)
