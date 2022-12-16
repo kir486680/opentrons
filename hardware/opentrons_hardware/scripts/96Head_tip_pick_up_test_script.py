@@ -509,7 +509,9 @@ async def run(args: argparse.Namespace) -> None:
             await home_z.run(can_messenger = messenger)
             await asyncio.sleep(10)
             # Prepare for aspirate --bottom
-            await move_plunger(66, 10).run(can_messenger = messenger)
+            blow_out_pos = 69
+            bottom_pos = 67
+            await move_plunger(bottom_pos, 10).run(can_messenger = messenger)
             await asyncio.sleep(delay)
             if trough_calibrate:
                 position = {'gantry_x': tiprack_pos['gantry_x'],
@@ -522,8 +524,8 @@ async def run(args: argparse.Namespace) -> None:
                                 'head_l': 151}
             input('Press Enter to Aspirate')
             # Aspirate
-            blow_out_plunger_distance_mm = 2
             aspirate_distance_mm = 13.21  # a / ((a * b) + c)  --- using table entry ABOVE desired volume
+            blow_out_plunger_distance_mm = blow_out_pos - bottom_pos
             dispense_distance_mm = aspirate_distance_mm + blow_out_plunger_distance_mm
             plunger_speed = round(aspirate_distance_mm / 3, 1)
             await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger = messenger)
