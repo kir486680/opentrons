@@ -364,7 +364,7 @@ async def _jog_axis(messenger: CanMessenger, position) -> None:
                 step_length_index = 0
             step = step_size[step_length_index]
 
-        elif input == '\r':
+        elif input == '\r' or input == '\n' or input == '\r\n':
             sys.stdout.flush()
             return position
         print('Coordinates: ', round(position['gantry_x'], 2), ',',
