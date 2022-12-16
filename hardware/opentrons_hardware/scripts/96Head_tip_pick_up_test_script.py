@@ -525,14 +525,13 @@ async def run(args: argparse.Namespace) -> None:
             blow_out_plunger_distance_mm = 2
             aspirate_distance_mm = 13.21  # a / ((a * b) + c)  --- using table entry ABOVE desired volume
             dispense_distance_mm = aspirate_distance_mm + blow_out_plunger_distance_mm
-            await move_plunger(aspirate_distance_mm, -10).run(can_messenger = messenger)
+            plunger_speed = round(aspirate_distance_mm / 3, 1)
+            await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger = messenger)
             await asyncio.sleep(delay)
-            await home_z.run(can_messenger = messenger)
-            await asyncio.sleep(3)
             plate_pos = await _jog_axis(messenger, trough_pos)
             input('Press Enter to Dispense!!')
             # Dispense + Blow out
-            await move_plunger(dispense_distance_mm, 10).run(can_messenger = messenger)
+            await move_plunger(dispense_distance_mm, plunger_speed).run(can_messenger = messenger)
             await asyncio.sleep(delay)
             await home_z.run(can_messenger = messenger)
             await asyncio.sleep(3)
