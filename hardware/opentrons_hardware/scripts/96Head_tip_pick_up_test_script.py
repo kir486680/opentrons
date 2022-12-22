@@ -487,64 +487,78 @@ async def run(args: argparse.Namespace) -> None:
             await asyncio.sleep(delay)
         #-------------------Pick up tip Motors----------------------------------
         elif args.test == 'full_pick_up_tip':
-            await home_z.run(can_messenger = messenger)
-            await asyncio.sleep(3)
+            blow_out_pos = 69
+            bottom_pos = 67
+            plunger_speed = 3  ## mm/sec
+            aspirate_distance_mm = 13.21  # a / ((a * b) + c)  --- using table entry ABOVE desired volume
+            mm_per_ul = aspirate_distance_mm / 200.0
+            wet_air_gap_mm = 40 * mm_per_ul  # make this ~2% of total volume
+            dry_air_gap_mm = 15 * mm_per_ul
+            dispense_distance_mm = aspirate_distance_mm + wet_air_gap_mm
+            blow_out_plunger_distance_mm = blow_out_pos - bottom_pos
+            input('ENTER to home Z')
+            await home_z_axis().run(can_messenger = messenger)
+            input("ENTER to home PLUNGER")
             # await home_gantry.run(can_messenger = messenger)
             # await asyncio.sleep(delay)
             await set_current(messenger, 1.5,NodeId.pipette_left)
             await home_pipette.run(can_messenger=messenger)
-            await asyncio.sleep(delay)
-            input("Press Enter to continue")
+            input("ENTER to home JAW")
             await home_jaw.run(can_messenger=messenger)
-            await asyncio.sleep(delay)
-            if calibrate:
-                position = {'gantry_x': 0,
-                            'gantry_y': 0,
-                            'head_l': 0}
-                tiprack_pos = await _jog_axis(messenger, position, only_z=True)
+            input("ENTER to jog to TIPRACK")
+            position = {'gantry_x': 0,
+                        'gantry_y': 0,
+                        'head_l': 0}
+            tiprack_pos = await _jog_axis(messenger, position, only_z=True)
+            input("ENTER to grab tips")
             await grab_tips.run(can_messenger=messenger)
-            await asyncio.sleep(5)
+            input("ENTER to home jaw")
             await home_jaw.run(can_messenger=messenger)
-            await asyncio.sleep(10)
-            await home_z.run(can_messenger = messenger)
-            await asyncio.sleep(10)
+            input('ENTER to home Z')
+            await home_z_axis().run(can_messenger=messenger)
             # Prepare for aspirate --bottom
-            blow_out_pos = 69
-            bottom_pos = 67
+            input('ENTER to prepare for aspirate')
             await move_plunger(bottom_pos, 10).run(can_messenger = messenger)
-            await asyncio.sleep(delay)
-            if trough_calibrate:
-                position = {'gantry_x': tiprack_pos['gantry_x'],
-                            'gantry_y': tiprack_pos['gantry_y'],
-                            'head_l': 0}
-                trough_pos = await _jog_axis(messenger, position, only_z=True)
-            else:
-                trough_pos = {'gantry_x': 251.9,
-                                'gantry_y': 329.2,
-                                'head_l': 151}
-            input('Press Enter to Aspirate')
+            input('ENTER to add AIR-GAP')
+            await move_plunger(wet_air_gap_mm, -10).run(can_messenger=messenger)
+            input('ENTER to jog to TROUGH')
+            position = {'gantry_x': tiprack_pos['gantry_x'],
+                        'gantry_y': tiprack_pos['gantry_y'],
+                        'head_l': 0}
+            await _jog_axis(messenger, position, only_z=True)
+            input('ENTER to Aspirate')
             # Aspirate
-            aspirate_distance_mm = 13.21  # a / ((a * b) + c)  --- using table entry ABOVE desired volume
-            blow_out_plunger_distance_mm = blow_out_pos - bottom_pos
-            dispense_distance_mm = aspirate_distance_mm + blow_out_plunger_distance_mm
-            plunger_speed = round(aspirate_distance_mm / 3, 1)
-            await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger = messenger)
-            await asyncio.sleep(delay)
-            plate_pos = await _jog_axis(messenger, trough_pos, only_z=True)
-            input('Press Enter to Dispense!!')
+            for i in range(5):
+                print(f"Pre-Wet {i + 1}/5")
+                await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger = messenger)
+                await move_plunger(aspirate_distance_mm, plunger_speed).run(can_messenger=messenger)
+            print("aspirating")
+            await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger=messenger)
+            input('ENTER to jog to RETRACT position')
+            await _jog_axis(messenger, position, only_z=True)
+            input('ENTER to do an AIR-GAP')
+            await move_plunger(dry_air_gap_mm, -plunger_speed).run(can_messenger=messenger)
+            input('ENTER to jog to PLATE')
+            await _jog_axis(messenger, position, only_z=True)
+            input('ENTER to remove AIR-GAP')
+            await move_plunger(dry_air_gap_mm, plunger_speed).run(can_messenger=messenger)
+            input('ENTER to jog to ASPIRATE')
+            await _jog_axis(messenger, position, only_z=True)
+            input('ENTER to DISPENSE')
             # Dispense + Blow out
             await move_plunger(dispense_distance_mm, plunger_speed).run(can_messenger = messenger)
-            await asyncio.sleep(delay)
-            await _jog_axis(messenger, trough_pos, only_z=True)
-            await asyncio.sleep(delay)
+            input('ENTER to jog a BLOWOUT position')
+            await _jog_axis(messenger, position, only_z=True)
+            input('ENTER to blowout')
+            await move_plunger(blow_out_plunger_distance_mm, 10).run(can_messenger=messenger)
+            input('ENTER to jog a bit more')
+            await _jog_axis(messenger, position, only_z=True)
             input('Press ENTER to home Z axis')
-            await home_z.run(can_messenger = messenger)
-            await asyncio.sleep(3)
+            await home_z_axis().run(can_messenger = messenger)
             input('Press Enter to Drop Tips!!')
             await drop_tips.run(can_messenger=messenger)
-            await asyncio.sleep(delay)
+            input('ENTER to home JAW')
             await home_jaw.run(can_messenger=messenger)
-            await asyncio.sleep(delay)
             # await move_y.run(can_messenger = messenger)
             # await asyncio.sleep(delay)
             # await move_x.run(can_messenger = messenger)
