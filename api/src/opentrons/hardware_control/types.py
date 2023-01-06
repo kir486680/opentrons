@@ -111,6 +111,8 @@ class OT3AxisKind(enum.Enum):
     #: Plunger axis (of the left and right pipettes)
     Z_G = 4
     #: Gripper Z axis
+    Q = 5
+    #: High-throughput tip grabbing axis
     OTHER = 5
     #: The internal axes of high throughput pipettes, for instance
 
@@ -290,6 +292,12 @@ class CurrentConfig:
 
     def as_tuple(self) -> Tuple[float, float]:
         return self.hold_current, self.run_current
+
+
+@dataclass(frozen=True)
+class MotorStatus:
+    motor_ok: bool
+    encoder_ok: bool
 
 
 class DoorState(enum.Enum):
@@ -487,10 +495,6 @@ class GripperJawState(enum.Enum):
     #: open position and probably should be opened before gripping something
     HOLDING_OPENED = enum.auto()
     #: the gripper is holding itself open but not quite at its homed position
-
-    @property
-    def ready_for_grip(self) -> bool:
-        return self in [GripperJawState.HOMED_READY, GripperJawState.HOLDING_OPENED]
 
 
 class InstrumentProbeType(enum.Enum):

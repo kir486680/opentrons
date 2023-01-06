@@ -14,11 +14,12 @@ import logging
 from itertools import dropwhile
 from typing import TYPE_CHECKING, Any, List, Dict, Optional, Union, Tuple
 
+from opentrons_shared_data.labware.dev_types import LabwareDefinition, LabwareParameters
+
 from opentrons.types import Location, Point, LocationLabware
 from opentrons.protocols.api_support.types import APIVersion
 from opentrons.protocols.api_support.util import requires_version
 from opentrons.protocols.api_support.definitions import MAX_SUPPORTED_VERSION
-from opentrons.protocols.geometry.deck_item import DeckItem
 from opentrons.protocols.geometry.well_geometry import WellGeometry
 
 # TODO(mc, 2022-09-02): re-exports provided for backwards compatibility
@@ -33,16 +34,9 @@ from opentrons.protocols.labware import (  # noqa: F401
 from . import validation
 from .core import well_grid
 from .core.labware import AbstractLabware
-from .core.protocol_api.labware import LabwareImplementation
+from .core.protocol_api.labware import LabwareImplementation as LegacyLabwareCore
 
 if TYPE_CHECKING:
-    from opentrons.protocols.geometry.module_geometry import (  # noqa: F401
-        ModuleGeometry,
-    )
-    from opentrons_shared_data.labware.dev_types import (
-        LabwareDefinition,
-        LabwareParameters,
-    )
     from .core.common import LabwareCore, WellCore
 
 
@@ -96,10 +90,16 @@ class Well:
     @property  # type: ignore[misc]
     @requires_version(2, 0)
     def has_tip(self) -> bool:
+        """If parent labware is a tip rack, whether this well contains a tip."""
         return self._impl.has_tip()
 
     @has_tip.setter
     def has_tip(self, value: bool) -> None:
+        _log.warning(
+            "Setting the `Well.has_tip` property manually has been deprecated"
+            " and will raise an error in a future version of the Python Protocol API."
+        )
+
         self._impl.set_has_tip(value)
 
     @property
@@ -230,7 +230,7 @@ class Well:
         return hash(self.top().point)
 
 
-class Labware(DeckItem):
+class Labware:
     """
     This class represents a labware, such as a PCR plate, a tube rack,
     reservoir, tip rack, etc. It defines the physical geometry of the labware,
@@ -292,7 +292,11 @@ class Labware(DeckItem):
 
     @property
     def separate_calibration(self) -> bool:
-        return self._implementation.separate_calibration
+        _log.warning(
+            "Labware.separate_calibrations is a deprecated internal property."
+            " It no longer has meaning, but will always return `False`"
+        )
+        return False
 
     @property  # type: ignore
     @requires_version(2, 0)
@@ -324,6 +328,7 @@ class Labware(DeckItem):
         load it, or the label of the labware specified by a user."""
         return self._implementation.get_name()
 
+    # TODO(jbl, 2022-12-06): deprecate officially when there is a PAPI version for the engine core
     @name.setter
     def name(self, new_name: str) -> None:
         """Set the labware name"""
@@ -613,6 +618,7 @@ class Labware(DeckItem):
     def tip_length(self) -> float:
         return self._implementation.get_tip_length()
 
+    # TODO(jbl, 2022-12-06): deprecate officially when there is a PAPI version for the engine core
     @tip_length.setter
     def tip_length(self, length: float) -> None:
         self._implementation.set_tip_length(length)
@@ -823,7 +829,7 @@ def load_from_definition(
                       defaults to ``MAX_SUPPORTED_VERSION``.
     """
     return Labware(
-        implementation=LabwareImplementation(
+        implementation=LegacyLabwareCore(
             definition=definition,
             parent=parent,
             label=label,

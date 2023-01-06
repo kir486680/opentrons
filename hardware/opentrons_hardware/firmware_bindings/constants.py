@@ -87,6 +87,8 @@ class MessageId(int, Enum):
 
     motor_position_request = 0x12
     motor_position_response = 0x14
+    update_motor_position_estimation_request = 0x21
+    update_motor_position_estimation_response = 0x22
 
     set_motion_constraints = 0x101
     get_motion_constraints_request = 0x102
@@ -104,6 +106,8 @@ class MessageId(int, Enum):
     gripper_grip_request = 0x42
     gripper_home_request = 0x43
     add_brushed_linear_move_request = 0x44
+    brushed_motor_conf_request = 0x45
+    brushed_motor_conf_response = 0x46
 
     acknowledgement = 0x50
 
@@ -148,9 +152,9 @@ class MessageId(int, Enum):
 class ErrorSeverity(int, Enum):
     """Error Severity levels."""
 
-    WARNING = 0x1
-    RECOVERABLE = 0x2
-    UNRECOVERABLE = 0x3
+    warning = 0x1
+    recoverable = 0x2
+    unrecoverable = 0x3
 
 
 @unique
@@ -163,6 +167,12 @@ class ErrorCode(int, Enum):
     invalid_byte_count = 0x03
     invalid_input = 0x04
     hardware = 0x05
+    timeout = 0x06
+    estop_detected = 0x07
+    collision_detected = 0x08
+    labware_dropped = 0x09
+    estop_released = 0x0A
+    motor_busy = 0x0B
 
 
 @unique

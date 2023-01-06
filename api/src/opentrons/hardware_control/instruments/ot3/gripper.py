@@ -94,9 +94,10 @@ class Gripper(AbstractInstrument[gripper_config.GripperConfig]):
     @current_jaw_displacement.setter
     def current_jaw_displacement(self, mm: float) -> None:
         assert mm >= 0.0, "jaw displacement from home should always be positive"
-        mm <= (self._max_jaw_displacement() + 0.5), (
-            "jaw displacement exceeds max expected value: "
-            f"{self._max_jaw_displacement() + 0.5} mm"
+        max_mm = self._max_jaw_displacement() + 2.0
+        assert mm <= max_mm, (
+            f"jaw displacement {round(mm, 1)} mm exceeds max expected value: "
+            f"{max_mm} mm"
         )
         self._current_jaw_displacement = mm
 
@@ -131,6 +132,9 @@ class Gripper(AbstractInstrument[gripper_config.GripperConfig]):
     def gripper_id(self) -> str:
         return self._gripper_id
 
+    def reload_configurations(self) -> None:
+        return None
+
     def reset_offset(self, to_default: bool) -> None:
         """Tempoarily reset the gripper offsets to default values."""
         if to_default:
@@ -144,6 +148,20 @@ class Gripper(AbstractInstrument[gripper_config.GripperConfig]):
         """Tempoarily reset the gripper offsets to default values."""
         save_gripper_calibration_offset(self._gripper_id, delta)
         self._calibration_offset = load_gripper_calibration_offset(self._gripper_id)
+
+    def check_calibration_pin_location_is_accurate(self) -> None:
+        if not self.attached_probe:
+            raise RuntimeError("must attach a probe before starting calibration")
+        if self.state != GripperJawState.GRIPPING:
+            raise RuntimeError("must grip the jaws before starting calibration")
+        if self.current_jaw_displacement == 0.0:
+            raise RuntimeError(
+                f"must grip the jaws before starting calibration (jaw displacement is {self.current_jaw_displacement})"
+            )
+        if self.current_jaw_displacement > self._max_jaw_displacement() - 1:
+            raise RuntimeError(
+                f"must hold something between gripper jaws during calibration (jaw displacement is {self.current_jaw_displacement})"
+            )
 
     def critical_point(self, cp_override: Optional[CriticalPoint] = None) -> Point:
         """
@@ -166,23 +184,25 @@ class Gripper(AbstractInstrument[gripper_config.GripperConfig]):
         if cp in [CriticalPoint.GRIPPER_JAW_CENTER, CriticalPoint.XY_CENTER]:
             return self._jaw_center_offset + Point(*self._calibration_offset.offset)
         elif cp == CriticalPoint.GRIPPER_FRONT_CALIBRATION_PIN:
+            self.check_calibration_pin_location_is_accurate()
             return (
                 self._front_calibration_pin_offset
                 + Point(*self._calibration_offset.offset)
-                - Point(y=self.current_jaw_displacement)
+                + Point(y=self.current_jaw_displacement)
             )
         elif cp == CriticalPoint.GRIPPER_REAR_CALIBRATION_PIN:
+            self.check_calibration_pin_location_is_accurate()
             return (
                 self._rear_calibration_pin_offset
                 + Point(*self._calibration_offset.offset)
-                + Point(y=self.current_jaw_displacement)
+                - Point(y=self.current_jaw_displacement)
             )
         else:
             raise InvalidMoveError(f"Critical point {cp_override} is not valid")
 
     def duty_cycle_by_force(self, newton: float) -> float:
-        return gripper_config.piecewise_force_conversion(
-            newton, self.config.jaw_force_per_duty_cycle
+        return gripper_config.duty_cycle_by_force(
+            newton, self._config.jaw_duty_cycle_polynomial
         )
 
     def __str__(self) -> str:

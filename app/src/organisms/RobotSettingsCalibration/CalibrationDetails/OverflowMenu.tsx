@@ -14,7 +14,7 @@ import {
   useOnClickOutside,
   useConditionalConfirm,
 } from '@opentrons/components'
-import { isOT3Pipette } from '@opentrons/shared-data'
+import { isOT3Pipette, SINGLE_MOUNT_PIPETTES } from '@opentrons/shared-data'
 
 import { OverflowBtn } from '../../../atoms/MenuList/OverflowBtn'
 import { MenuItem } from '../../../atoms/MenuList/MenuItem'
@@ -79,6 +79,10 @@ export function OverflowMenu({
     setShowOverflowMenu,
   } = useMenuHandleClickOutside()
   const { isDeckCalibrated } = useDeckCalibrationData(robotName)
+
+  const enableCalibrationWizards = Config.useFeatureFlag(
+    'enableCalibrationWizards'
+  )
 
   const calsOverflowWrapperRef = useOnClickOutside<HTMLDivElement>({
     onClickOutside: () => setShowOverflowMenu(false),
@@ -240,6 +244,8 @@ export function OverflowMenu({
           mount={mount}
           closeFlow={() => setShowPipetteWizardFlows(false)}
           robotName={robotName}
+          //  TODO(jr/12/1/22): only single mount pipettes can be calibrated here for now
+          selectedPipette={SINGLE_MOUNT_PIPETTES}
         />
       ) : null}
       {showOverflowMenu ? (
@@ -255,7 +261,17 @@ export function OverflowMenu({
           right={0}
           flexDirection={DIRECTION_COLUMN}
         >
-          {mount != null && (
+          {enableCalibrationWizards &&
+            calType === 'pipetteOffset' &&
+            applicablePipetteOffsetCal == null && (
+              <MenuItem
+                onClick={e => handleCalibration(calType, e)}
+                disabled={disabledReason !== null}
+              >
+                {t('calibrate_pipette')}
+              </MenuItem>
+            )}
+          {!enableCalibrationWizards && mount != null && (
             <MenuItem
               onClick={e => handleCalibration(calType, e)}
               disabled={disabledReason !== null}

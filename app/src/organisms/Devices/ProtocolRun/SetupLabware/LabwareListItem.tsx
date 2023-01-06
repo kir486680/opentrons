@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import styled, { css } from 'styled-components'
+
 import {
   Flex,
   SPACING,
@@ -18,6 +19,7 @@ import {
   WELL_LABEL_OPTIONS,
   SIZE_AUTO,
 } from '@opentrons/components'
+import { useCreateLiveCommandMutation } from '@opentrons/react-api-client'
 import {
   getLabwareDisplayName,
   getModuleDisplayName,
@@ -26,19 +28,22 @@ import {
   LabwareDefinition2,
   MAGNETIC_MODULE_TYPE,
   ModuleType,
-  TC_MODULE_LOCATION,
+  TC_MODULE_LOCATION_OT2,
+  TC_MODULE_LOCATION_OT3,
   THERMOCYCLER_MODULE_TYPE,
+  THERMOCYCLER_MODULE_V2,
 } from '@opentrons/shared-data'
-import { useCreateLiveCommandMutation } from '@opentrons/react-api-client'
+
 import { ToggleButton } from '../../../../atoms/buttons'
 import { StyledText } from '../../../../atoms/text'
-import { SecureLabwareModal } from '../../../ProtocolSetup/RunSetupCard/LabwareSetup/SecureLabwareModal'
+import { SecureLabwareModal } from './SecureLabwareModal'
+
 import type {
   HeaterShakerCloseLatchCreateCommand,
   HeaterShakerOpenLatchCreateCommand,
 } from '@opentrons/shared-data/protocol/types/schemaV6/command/module'
-import type { ModuleTypesThatRequireExtraAttention } from '../../../ProtocolSetup/RunSetupCard/LabwareSetup/utils/getModuleTypesThatRequireExtraAttention'
 import type { ModuleRenderInfoForProtocol } from '../../hooks'
+import type { ModuleTypesThatRequireExtraAttention } from '../utils/getModuleTypesThatRequireExtraAttention'
 import type { LabwareSetupItem } from './types'
 
 const LabwareRow = styled.div`
@@ -54,6 +59,7 @@ const LabwareRow = styled.div`
 interface LabwareListItemProps extends LabwareSetupItem {
   attachedModuleInfo: { [moduleId: string]: ModuleRenderInfoForProtocol }
   extraAttentionModules: ModuleTypesThatRequireExtraAttention[]
+  isOt3: boolean
 }
 
 export function LabwareListItem(
@@ -67,6 +73,7 @@ export function LabwareListItem(
     moduleModel,
     moduleLocation,
     extraAttentionModules,
+    isOt3,
   } = props
   const { t } = useTranslation('protocol_setup')
   const [
@@ -103,7 +110,7 @@ export function LabwareListItem(
     )
     let moduleSlotName = moduleLocation.slotName
     if (moduleType === THERMOCYCLER_MODULE_TYPE) {
-      moduleSlotName = TC_MODULE_LOCATION
+      moduleSlotName = isOt3 ? TC_MODULE_LOCATION_OT3 : TC_MODULE_LOCATION_OT2
     }
     slotInfo = t('module_slot_location', {
       slotName: moduleSlotName,
@@ -112,33 +119,35 @@ export function LabwareListItem(
     switch (moduleTypeNeedsAttention) {
       case MAGNETIC_MODULE_TYPE:
       case THERMOCYCLER_MODULE_TYPE:
-        extraAttentionText = (
-          <Btn
-            css={css`
-              color: ${COLORS.darkGreyEnabled};
+        if (moduleModel !== THERMOCYCLER_MODULE_V2) {
+          extraAttentionText = (
+            <Btn
+              css={css`
+                color: ${COLORS.darkGreyEnabled};
 
-              &:hover {
-                color: ${COLORS.darkBlackEnabled};
-              }
-            `}
-            onClick={() => setSecureLabwareModalType(moduleType)}
-          >
-            <Flex flexDirection={DIRECTION_ROW}>
-              <Icon
-                name="information"
-                size="0.75rem"
-                marginTop={SPACING.spacingXS}
-              />
-              <StyledText
-                marginLeft={SPACING.spacing2}
-                as="p"
-                textDecoration={TYPOGRAPHY.textDecorationUnderline}
-              >
-                {t('secure_labware_instructions')}
-              </StyledText>
-            </Flex>
-          </Btn>
-        )
+                &:hover {
+                  color: ${COLORS.darkBlackEnabled};
+                }
+              `}
+              onClick={() => setSecureLabwareModalType(moduleType)}
+            >
+              <Flex flexDirection={DIRECTION_ROW}>
+                <Icon
+                  name="information"
+                  size="0.75rem"
+                  marginTop={SPACING.spacingXS}
+                />
+                <StyledText
+                  marginLeft={SPACING.spacing2}
+                  as="p"
+                  textDecoration={TYPOGRAPHY.textDecorationUnderline}
+                >
+                  {t('secure_labware_instructions')}
+                </StyledText>
+              </Flex>
+            </Btn>
+          )
+        }
         break
       case HEATERSHAKER_MODULE_TYPE:
         isHeaterShakerInProtocol = true
@@ -257,7 +266,9 @@ function StandaloneLabware(props: {
   const { definition } = props
   return (
     <LabwareThumbnail
-      viewBox={` 0 0 ${definition.dimensions.xDimension} ${definition.dimensions.yDimension}`}
+      viewBox={` 0 0 ${String(definition.dimensions.xDimension)} ${String(
+        definition.dimensions.yDimension
+      )}`}
     >
       <LabwareRender
         definition={definition}
