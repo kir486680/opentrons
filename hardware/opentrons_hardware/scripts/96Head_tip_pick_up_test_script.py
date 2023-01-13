@@ -396,7 +396,7 @@ async def run(args: argparse.Namespace) -> None:
     grap_speed = 5.5
     grap_distance = 19
     drop_speed = 5.5
-    drop_distance = 27
+    drop_distance = 29
     pick_up_distance = 12
     calibrate = True
     trough_calibrate = True
@@ -489,8 +489,8 @@ async def run(args: argparse.Namespace) -> None:
         elif args.test == 'full_pick_up_tip':
             blow_out_pos = 69
             bottom_pos = 67
-            plunger_speed = 3  ## mm/sec
-            aspirate_distance_mm = 13.21  # a / ((a * b) + c)  --- using table entry ABOVE desired volume
+            plunger_speed = 10  ## mm/sec
+            aspirate_distance_mm = 64 #13.21  # a / ((a * b) + c)  --- using table entry ABOVE desired volume
             mm_per_ul = aspirate_distance_mm / 200.0
             wet_air_gap_mm = 40 * mm_per_ul  # make this ~2% of total volume
             dry_air_gap_mm = 15 * mm_per_ul
@@ -517,10 +517,11 @@ async def run(args: argparse.Namespace) -> None:
             input('ENTER to home Z')
             await home_z_axis().run(can_messenger=messenger)
             # Prepare for aspirate --bottom
+            await set_current(messenger, 1.5,NodeId.pipette_left)
             input('ENTER to prepare for aspirate')
             await move_plunger(bottom_pos, 10).run(can_messenger = messenger)
-            input('ENTER to add AIR-GAP')
-            await move_plunger(wet_air_gap_mm, -10).run(can_messenger=messenger)
+            #input('ENTER to add AIR-GAP')
+            #await move_plunger(wet_air_gap_mm, -10).run(can_messenger=messenger)
             input('ENTER to jog to TROUGH')
             position = {'gantry_x': tiprack_pos['gantry_x'],
                         'gantry_y': tiprack_pos['gantry_y'],
@@ -528,10 +529,12 @@ async def run(args: argparse.Namespace) -> None:
             await _jog_axis(messenger, position, only_z=True)
             input('ENTER to Aspirate')
             # Aspirate
+            """
             for i in range(5):
                 print(f"Pre-Wet {i + 1}/5")
                 await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger = messenger)
                 await move_plunger(aspirate_distance_mm, plunger_speed).run(can_messenger=messenger)
+            """   
             print("aspirating")
             await move_plunger(aspirate_distance_mm, -plunger_speed).run(can_messenger=messenger)
             input('ENTER to jog to RETRACT position')
@@ -645,7 +648,7 @@ LOG_CONFIG = {
         "file_handler": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "basic",
-            "filename": "HT_tip_handling.log",
+            "filename": "/var/log/HT_tip_handling.log",
             "maxBytes": 5000000,
             "level": logging.INFO,
             "backupCount": 3,
