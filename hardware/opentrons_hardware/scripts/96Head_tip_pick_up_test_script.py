@@ -1,5 +1,4 @@
 """A script for sending and receiving data from sensors on the OT3."""
-
 import logging
 import asyncio
 import argparse
@@ -10,7 +9,6 @@ import sys
 import tty
 from typing import List, Tuple
 
-from typing import Callable
 from logging.config import dictConfig
 
 from opentrons_hardware.firmware_bindings.messages.message_definitions import WriteMotorCurrentRequest
@@ -34,10 +32,104 @@ from opentrons_shared_data.pipette.pipette_definition import (
     PipetteVersionType, PipetteChannelType, PipetteModelType, PipetteTipType,
 )
 
+AXIS_SPEED_X = 30
+AXIS_SPEED_Y = 60
+AXIS_SPEED_Z = 10.5
+
 AccuracyAdjustTable = List[Tuple[float, float, float]]
 # copy the lookup table from EVT single-channel pipettes
 PIPETTE_SINGLE_EVT_VERSION = PipetteVersionType(major=3, minor=3)
 PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM = 15.904
+
+PLUNGER_BOTTOM = 66
+PLUNGER_BLOW_OUT = 71
+
+DEFAULT_DISPENSE_SPEED_UL = 150
+DEFAULT_TRAILING_SPEED_MM = 1  # mm/sec
+
+GRAB_SPEED = 5.5
+GRAB_DISTANCE = 19
+DROP_SPEED = 5.5
+DROP_DISTANCE = 29
+
+TIP_OVERLAP = 10.5
+TIP_LENGTH = {
+    50: 57.9 - TIP_OVERLAP,
+    200: 58.35 - TIP_OVERLAP,
+    1000: 95.6 - TIP_OVERLAP
+}
+
+CAL_DIST_TIP_RACK_FEATURES = 125
+CAL_DIST_RESERVOIR_TOP = 100  # subtract tip-length
+CAL_DIST_RESERVOIR_TOP_TO_DEAD = 19
+
+
+@dataclass
+class TestParams:
+    tip_volume: int
+    aspirate_volume_ul: float
+    aspirate_speed_ul_per_sec: float
+    leading_air_gap_ul: float
+    trailing_air_gap_ul: float
+
+
+TESTS = {
+    "t50-1ul": TestParams(tip_volume=50,
+                          aspirate_volume_ul=1.0,
+                          aspirate_speed_ul_per_sec=20.0,
+                          leading_air_gap_ul=15.0,
+                          trailing_air_gap_ul=2.0),
+    "t50-10ul": TestParams(tip_volume=50,
+                           aspirate_volume_ul=10.0,
+                           aspirate_speed_ul_per_sec=5.7,
+                           leading_air_gap_ul=15.0,
+                           trailing_air_gap_ul=0.1),
+    "t50-50ul": TestParams(tip_volume=50,
+                           aspirate_volume_ul=50.0,
+                           aspirate_speed_ul_per_sec=44.2,
+                           leading_air_gap_ul=15.0,
+                           trailing_air_gap_ul=0.1),
+    "t200-10ul": TestParams(tip_volume=200,
+                            aspirate_volume_ul=10,
+                            aspirate_speed_ul_per_sec=12.5,
+                            leading_air_gap_ul=10,
+                            trailing_air_gap_ul=5),
+    "t200-50ul": TestParams(tip_volume=200,
+                            aspirate_volume_ul=50,
+                            aspirate_speed_ul_per_sec=37.5,
+                            leading_air_gap_ul=10,
+                            trailing_air_gap_ul=3.5),
+    "t200-200ul": TestParams(tip_volume=200,
+                             aspirate_volume_ul=200,
+                             aspirate_speed_ul_per_sec=150,
+                             leading_air_gap_ul=7.7,
+                             trailing_air_gap_ul=2),
+    "t1000-10ul": TestParams(tip_volume=1000,
+                             aspirate_volume_ul=10,
+                             aspirate_speed_ul_per_sec=22,
+                             leading_air_gap_ul=10,
+                             trailing_air_gap_ul=10),
+    "t1000-50ul": TestParams(tip_volume=1000,
+                             aspirate_volume_ul=50,
+                             aspirate_speed_ul_per_sec=37,
+                             leading_air_gap_ul=10,
+                             trailing_air_gap_ul=10),
+    "t1000-200ul": TestParams(tip_volume=1000,
+                              aspirate_volume_ul=200,
+                              aspirate_speed_ul_per_sec=150,
+                              leading_air_gap_ul=7,
+                              trailing_air_gap_ul=10),
+    "t1000-500ul": TestParams(tip_volume=1000,
+                              aspirate_volume_ul=500,
+                              aspirate_speed_ul_per_sec=150,
+                              leading_air_gap_ul=2,
+                              trailing_air_gap_ul=10),
+    "t1000-1000ul": TestParams(tip_volume=1000,
+                               aspirate_volume_ul=1000,
+                               aspirate_speed_ul_per_sec=150,
+                               leading_air_gap_ul=2,
+                               trailing_air_gap_ul=10),
+}
 
 
 def _get_accuracy_adjust_table(tip_volume: int) -> AccuracyAdjustTable:
@@ -57,25 +149,11 @@ def _get_plunger_distance_for_volume(table: AccuracyAdjustTable, volume: float) 
         next_entry = table[i + 1]
         if this_entry[0] < volume < next_entry[0]:
             tv, ts, ti = this_entry
-            print(f"\tv={tv}, s={ts}, i={ti}")
+            print(f"Lookup Table Values: v={tv}, s={ts}, i={ti}")
             ul_per_mm = (volume * ts) + ti
             mm_travel = volume / ul_per_mm
             return mm_travel
     raise ValueError(f"unable to find volume {volume} in table")
-
-
-GetInputFunc = Callable[[str], str]
-OutputFunc = Callable[[str], None]
-
-
-class InvalidInput(Exception):
-    """Invalid input exception."""
-    pass
-
-
-def _calc_time(distance, speed):
-    time = abs(distance/speed)
-    return time
 
 
 async def set_current(messenger: CanMessenger, current: float, node: NodeId):
@@ -98,8 +176,7 @@ def move_pipette_mechanism(distance, velocity):
                 {
                     pipette_node: MoveGroupTipActionStep(
                         velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(_calc_time(distance,
-                                                        velocity)),
+                        duration_sec=float64(abs(distance / velocity)),
                         stop_condition=MoveStopCondition.none,
                         action=PipetteTipActionType.pick_up,
                     )
@@ -120,8 +197,7 @@ def home_pipette_jaw():
                 {
                     pipette_node: MoveGroupTipActionStep(
                         velocity_mm_sec=float64(-velocity),
-                        duration_sec=float64(_calc_time(distance,
-                                                        velocity)),
+                        duration_sec=float64(abs(distance / velocity)),
                         stop_condition=MoveStopCondition.limit_switch,
                         action=PipetteTipActionType.pick_up,
                     )
@@ -141,8 +217,7 @@ def move_z_axis(distance, velocity):
                     NodeId.head_l: MoveGroupSingleAxisStep(
                         distance_mm=float64(0),
                         velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(_calc_time(distance,
-                                                        velocity)),
+                        duration_sec=float64(abs(distance / velocity)),
                     )
                 }
             ],
@@ -160,8 +235,7 @@ def move_x_axis(distance, velocity):
                     NodeId.gantry_x: MoveGroupSingleAxisStep(
                         distance_mm=float64(0),
                         velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(_calc_time(distance,
-                                                        velocity)),
+                        duration_sec=float64(abs(distance / velocity)),
                     )
                 }
             ],
@@ -179,8 +253,7 @@ def move_y_axis(distance, velocity):
                     NodeId.gantry_y: MoveGroupSingleAxisStep(
                         distance_mm=float64(0),
                         velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(_calc_time(distance,
-                                                        velocity)),
+                        duration_sec=float64(abs(distance / velocity)),
                     )
                 }
             ],
@@ -199,8 +272,7 @@ def move_plunger(distance, velocity):
                     pipette_node: MoveGroupSingleAxisStep(
                         distance_mm=float64(0),
                         velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(_calc_time(distance,
-                                                        velocity)),
+                        duration_sec=float64(abs(distance / velocity)),
                     )
                 }
             ]
@@ -293,9 +365,6 @@ async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
     step_size = [0.1, 0.5, 1, 10, 20, 50]
     step_length_index = 3
     step = step_size[step_length_index]
-    x_speed = 30
-    y_speed = 60
-    z_speed = 10.5
     x_pos = 0
     y_pos = 0
     z_pos = 0
@@ -319,7 +388,7 @@ async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
             sys.stdout.flush()
             x_pos = x_pos + step
             position['gantry_x'] = x_pos
-            x_move = move_x_axis(step, x_speed)
+            x_move = move_x_axis(step, AXIS_SPEED_X)
             await x_move.run(can_messenger = messenger)
 
         elif not only_z and input == 'd':
@@ -327,7 +396,7 @@ async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
             sys.stdout.flush()
             x_pos = x_pos - step
             position['gantry_x'] = x_pos
-            x_move = move_x_axis(step, -x_speed)
+            x_move = move_x_axis(step, -AXIS_SPEED_X)
             await x_move.run(can_messenger = messenger)
 
         elif not only_z and input == 'w':
@@ -335,7 +404,7 @@ async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
             sys.stdout.flush()
             y_pos = y_pos - step
             position['gantry_y'] = y_pos
-            y_move = move_y_axis(step, -y_speed)
+            y_move = move_y_axis(step, -AXIS_SPEED_Y)
             await y_move.run(can_messenger = messenger)
 
         elif not only_z and input == 's':
@@ -343,21 +412,21 @@ async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
             sys.stdout.flush()
             y_pos = y_pos + step
             position['gantry_y'] = y_pos
-            y_move = move_y_axis(step, y_speed)
+            y_move = move_y_axis(step, AXIS_SPEED_Y)
             await y_move.run(can_messenger = messenger)
 
         elif input == 'i':
             sys.stdout.flush()
             z_pos = z_pos - step
             position['head_l'] = z_pos
-            z_move = move_z_axis(step, -z_speed)
+            z_move = move_z_axis(step, -AXIS_SPEED_Z)
             await z_move.run(can_messenger = messenger)
 
         elif input == 'k':
             sys.stdout.flush()
             z_pos = z_pos + step
             position['head_l'] = z_pos
-            z_move = move_z_axis(step, z_speed)
+            z_move = move_z_axis(step, AXIS_SPEED_Z)
             await z_move.run(can_messenger = messenger)
 
         elif input == 'q':
@@ -390,85 +459,6 @@ async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
         print('\r', end='')
 
 
-@dataclass
-class TestParams:
-    tip_volume: int
-    aspirate_volume_ul: float
-    aspirate_speed_ul_per_sec: float
-    leading_air_gap_ul: float
-    trailing_air_gap_ul: float
-
-
-TESTS = {
-    "t50-1ul": TestParams(tip_volume=50,
-                          aspirate_volume_ul=1.0,
-                          aspirate_speed_ul_per_sec=20.0,
-                          leading_air_gap_ul=15.0,
-                          trailing_air_gap_ul=2.0),
-    "t50-10ul": TestParams(tip_volume=50,
-                           aspirate_volume_ul=10.0,
-                           aspirate_speed_ul_per_sec=5.7,
-                           leading_air_gap_ul=15.0,
-                           trailing_air_gap_ul=0.1),
-    "t50-50ul": TestParams(tip_volume=50,
-                           aspirate_volume_ul=50.0,
-                           aspirate_speed_ul_per_sec=44.2,
-                           leading_air_gap_ul=15.0,
-                           trailing_air_gap_ul=0.1),
-    "t200-10ul": TestParams(tip_volume=200,
-                            aspirate_volume_ul=10,
-                            aspirate_speed_ul_per_sec=12.5,
-                            leading_air_gap_ul=10,
-                            trailing_air_gap_ul=5),
-    "t200-50ul": TestParams(tip_volume=200,
-                            aspirate_volume_ul=50,
-                            aspirate_speed_ul_per_sec=37.5,
-                            leading_air_gap_ul=10,
-                            trailing_air_gap_ul=3.5),
-    "t200-200ul": TestParams(tip_volume=200,
-                             aspirate_volume_ul=200,
-                             aspirate_speed_ul_per_sec=150,
-                             leading_air_gap_ul=7.7,
-                             trailing_air_gap_ul=2),
-    "t1000-10ul": TestParams(tip_volume=1000,
-                             aspirate_volume_ul=10,
-                             aspirate_speed_ul_per_sec=22,
-                             leading_air_gap_ul=10,
-                             trailing_air_gap_ul=10),
-    "t1000-50ul": TestParams(tip_volume=1000,
-                             aspirate_volume_ul=50,
-                             aspirate_speed_ul_per_sec=37,
-                             leading_air_gap_ul=10,
-                             trailing_air_gap_ul=10),
-    "t1000-200ul": TestParams(tip_volume=1000,
-                              aspirate_volume_ul=200,
-                              aspirate_speed_ul_per_sec=150,
-                              leading_air_gap_ul=7,
-                              trailing_air_gap_ul=10),
-    "t1000-500ul": TestParams(tip_volume=1000,
-                              aspirate_volume_ul=500,
-                              aspirate_speed_ul_per_sec=150,
-                              leading_air_gap_ul=2,
-                              trailing_air_gap_ul=10),
-    "t1000-1000ul": TestParams(tip_volume=1000,
-                               aspirate_volume_ul=1000,
-                               aspirate_speed_ul_per_sec=150,
-                               leading_air_gap_ul=2,
-                               trailing_air_gap_ul=10),
-}
-
-PLUNGER_BOTTOM = 66
-PLUNGER_BLOW_OUT = 71
-
-DEFAULT_DISPENSE_SPEED_UL = 600
-DEFAULT_TRAILING_SPEED_MM = 1  # mm/sec
-
-GRAB_SPEED = 5.5
-GRAB_DISTANCE = 19
-DROP_SPEED = 5.5
-DROP_DISTANCE = 29
-
-
 async def _run(args: argparse.Namespace) -> None:
     driver = await build_driver(build_settings(args))
     messenger = CanMessenger(driver=driver)
@@ -480,6 +470,13 @@ async def _run(args: argparse.Namespace) -> None:
     home_pipette = home_plunger()
 
     test = TESTS[args.test]
+    print("----------")
+    print(f"tip-ul: {test.tip_volume}")
+    print(f"aspirate-ul: {test.aspirate_volume_ul}")
+    print(f"aspirate-speed-ul: {test.aspirate_speed_ul_per_sec}")
+    print(f"leading-air-gap-ul: {test.leading_air_gap_ul}")
+    print(f"trailing-air-gap-ul: {test.trailing_air_gap_ul}")
+
     table = _get_accuracy_adjust_table(test.tip_volume)
     aspirate_mm = _get_plunger_distance_for_volume(table, test.aspirate_volume_ul)
     aspirate_seconds = test.aspirate_volume_ul / test.aspirate_speed_ul_per_sec
@@ -487,11 +484,18 @@ async def _run(args: argparse.Namespace) -> None:
     leading_air_gap_mm = test.leading_air_gap_ul / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
     trailing_air_gap_mm = test.trailing_air_gap_ul / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
     dispense_mm = leading_air_gap_mm + aspirate_mm + trailing_air_gap_mm
+    dispense_speed_mm = DEFAULT_DISPENSE_SPEED_UL / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
+    blow_out_plunger_distance_mm = PLUNGER_BLOW_OUT - PLUNGER_BOTTOM
 
-    print(f"wet-air-gap-mm: {trailing_air_gap_mm}")
+    print("----------")
     print(f"aspirate-mm: {aspirate_mm}")
-    print(f"dry-air-gap-mm: {leading_air_gap_mm}")
+    print(f"aspirate-speed-mm: {aspirate_speed_mm}")
+    print(f"leading-air-gap-mm: {leading_air_gap_mm}")
+    print(f"trailing-air-gap-mm: {trailing_air_gap_mm}")
     print(f"total travelled: {trailing_air_gap_mm + aspirate_mm + leading_air_gap_mm} / {PLUNGER_BOTTOM}")
+    print(f'dispensing: {dispense_mm} mm at speed {dispense_speed_mm} mm/sec')
+    print(f'blowout: {blow_out_plunger_distance_mm} mm')
+    print("----------")
 
     try:
         # only use accuracy-adjustment when moving liquids
@@ -503,6 +507,8 @@ async def _run(args: argparse.Namespace) -> None:
         input("ENTER to home JAW")
         await home_jaw.run(can_messenger=messenger)
         if "y" in input("Pick-up Tips? (y/n): ").lower():
+            input("ENTER to hover above tiprack:")
+            z_move = move_z_axis(CAL_DIST_TIP_RACK_FEATURES, -AXIS_SPEED_Z)
             print("JOG to the TIPRACK")
             position = {'gantry_x': 0,
                         'gantry_y': 0,
@@ -544,14 +550,10 @@ async def _run(args: argparse.Namespace) -> None:
         await move_plunger(leading_air_gap_mm, -DEFAULT_TRAILING_SPEED_MM).run(can_messenger=messenger)
         print('JOG to the DISPENSE position')
         await _jog_axis(messenger, position, only_z=True)
-        print(f'dispensing: {dispense_mm} mm')
-        dispense_speed_mm = DEFAULT_DISPENSE_SPEED_UL / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
         await move_plunger(dispense_mm, dispense_speed_mm).run(can_messenger=messenger)
         print('JOG to the BLOWOUT position')
         await _jog_axis(messenger, position, only_z=True)
-        blow_out_plunger_distance_mm = PLUNGER_BLOW_OUT - PLUNGER_BOTTOM
-        print(f'blowout: {blow_out_plunger_distance_mm} mm')
-        await move_plunger(blow_out_plunger_distance_mm, 10).run(can_messenger=messenger)
+        await move_plunger(blow_out_plunger_distance_mm, dispense_speed_mm).run(can_messenger=messenger)
         print('JOG to CATCH DROPLETS')
         await _jog_axis(messenger, position, only_z=True)
         print('homing Z Axis')
