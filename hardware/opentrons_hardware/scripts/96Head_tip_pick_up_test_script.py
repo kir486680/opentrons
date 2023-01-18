@@ -567,6 +567,10 @@ async def run(args: argparse.Namespace) -> None:
                 await home_jaw.run(can_messenger=messenger)
                 input('ENTER to home Z')
                 await home_z_axis().run(can_messenger=messenger)
+            else:
+                tiprack_pos = {'gantry_x': 0,
+                               'gantry_y': 0,
+                               'head_l': 0}
             # Prepare for aspirate --bottom
             await set_current(messenger, 1.5, NodeId.pipette_left)
             print('preparing for aspirate')
