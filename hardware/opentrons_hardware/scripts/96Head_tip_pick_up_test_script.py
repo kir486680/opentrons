@@ -4,9 +4,6 @@ import asyncio
 import argparse
 from dataclasses import dataclass
 from numpy import float64
-import termios
-import sys
-import tty
 from typing import List, Tuple
 
 from logging.config import dictConfig
@@ -52,16 +49,23 @@ GRAB_DISTANCE = 19
 DROP_SPEED = 5.5
 DROP_DISTANCE = 29
 
-TIP_OVERLAP = 10.5
+TIP_OVERLAP = 10  # seems to be about 0.5mm above ideal spot
 TIP_LENGTH = {
     50: 57.9 - TIP_OVERLAP,
     200: 58.35 - TIP_OVERLAP,
     1000: 95.6 - TIP_OVERLAP
 }
 
-CAL_DIST_TIP_RACK_FEATURES = 125
-CAL_DIST_RESERVOIR_TOP = 100  # subtract tip-length
-CAL_DIST_RESERVOIR_TOP_TO_DEAD = 19
+# NOTE: home position is 0, moving down is position (+)
+CAL_POS_TIP_RACK_FEATURES = 125
+CAL_POS_RESERVOIR_TOP = 218.6  # w/ added tip-length (was 133 using t1000)
+CAL_POS_RESERVOIR_DEAD = CAL_POS_RESERVOIR_TOP + 26  # maybe 0.5mm submerged into inset
+CAL_POS_MVS_TOP_TO_PLATE_200_UL = 242.1
+CAL_POS_MVS_TOP_TO_PLATE_TOP = 236.1
+
+CURRENT_Z_POS = 0
+CURRENT_HAS_TIP = False
+CURRENT_TIP_LENGTH = 0
 
 
 @dataclass
@@ -208,7 +212,15 @@ def home_pipette_jaw():
     return move
 
 
-def move_z_axis(distance, velocity):
+def move_z_axis_to(position, velocity):
+    global CURRENT_Z_POS
+    position -= CURRENT_TIP_LENGTH
+    if position > CURRENT_Z_POS:
+        velocity = abs(velocity)
+    else:
+        velocity = abs(velocity) * -1
+    distance = abs(CURRENT_Z_POS - position)
+    CURRENT_Z_POS = position
     move_z = MoveGroupRunner(
         move_groups=[
             # Group 1
@@ -224,42 +236,6 @@ def move_z_axis(distance, velocity):
         ]
     )
     return move_z
-
-
-def move_x_axis(distance, velocity):
-    move_x = MoveGroupRunner(
-        move_groups=[
-            # Group 1
-            [
-                {
-                    NodeId.gantry_x: MoveGroupSingleAxisStep(
-                        distance_mm=float64(0),
-                        velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(abs(distance / velocity)),
-                    )
-                }
-            ],
-        ]
-    )
-    return move_x
-
-
-def move_y_axis(distance, velocity):
-    move_y = MoveGroupRunner(
-        move_groups=[
-            # Group 1
-            [
-                {
-                    NodeId.gantry_y: MoveGroupSingleAxisStep(
-                        distance_mm=float64(0),
-                        velocity_mm_sec=float64(velocity),
-                        duration_sec=float64(abs(distance / velocity)),
-                    )
-                }
-            ],
-        ]
-    )
-    return move_y
 
 
 def move_plunger(distance, velocity):
@@ -282,6 +258,7 @@ def move_plunger(distance, velocity):
 
 
 def home_z_axis():
+    global CURRENT_Z_POS
     speed = 10.5
     home_z = MoveGroupRunner(
         move_groups=[
@@ -297,35 +274,7 @@ def home_z_axis():
             ]
         ]
     )
-    return home_z
-
-
-def home_gantry_xy():
-    speed = 20
-    home_z = MoveGroupRunner(
-        move_groups=[
-            [
-                {
-                    NodeId.gantry_x: MoveGroupSingleAxisStep(
-                        distance_mm=float64(0),
-                        velocity_mm_sec=float64(-speed),
-                        duration_sec=float64(100),
-                        stop_condition=MoveStopCondition.limit_switch,
-                    )
-                }
-            ],
-            [
-                {
-                    NodeId.gantry_y: MoveGroupSingleAxisStep(
-                        distance_mm=float64(0),
-                        velocity_mm_sec=float64(-speed),
-                        duration_sec=float64(100),
-                        stop_condition=MoveStopCondition.limit_switch,
-                    )
-                }
-            ],
-        ]
-    )
+    CURRENT_Z_POS = 0
     return home_z
 
 
@@ -344,122 +293,9 @@ def home_plunger():
     return home_plunger_runner
 
 
-def getch():
-    """
-        fd: file descriptor stdout, stdin, stderr
-        This functions gets a single input keyboard character from the user
-    """
-    def _getch():
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            ch = sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
-    return _getch()
-
-
-async def _jog_axis(messenger: CanMessenger, position, only_z=False) -> None:
-    step_size = [0.1, 0.5, 1, 10, 20, 50]
-    step_length_index = 3
-    step = step_size[step_length_index]
-    x_pos = 0
-    y_pos = 0
-    z_pos = 0
-    information_str = """
-        Click  >>   i   << to move up
-        Click  >>   k   << to move down
-        Click  >>   a  << to move left
-        Click  >>   d  << to move right
-        Click  >>   w  << to move forward
-        Click  >>   s  << to move back
-        Click  >>   +   << to Increase the length of each step
-        Click  >>   -   << to decrease the length of each step
-        Click  >> Enter << to save position
-        Click  >> q << to quit the test script
-                    """
-    print(information_str)
-    while True:
-        input = getch()
-        if not only_z and input == 'a':
-            # minus x direction
-            sys.stdout.flush()
-            x_pos = x_pos + step
-            position['gantry_x'] = x_pos
-            x_move = move_x_axis(step, AXIS_SPEED_X)
-            await x_move.run(can_messenger = messenger)
-
-        elif not only_z and input == 'd':
-            #plus x direction
-            sys.stdout.flush()
-            x_pos = x_pos - step
-            position['gantry_x'] = x_pos
-            x_move = move_x_axis(step, -AXIS_SPEED_X)
-            await x_move.run(can_messenger = messenger)
-
-        elif not only_z and input == 'w':
-            #minus y direction
-            sys.stdout.flush()
-            y_pos = y_pos - step
-            position['gantry_y'] = y_pos
-            y_move = move_y_axis(step, -AXIS_SPEED_Y)
-            await y_move.run(can_messenger = messenger)
-
-        elif not only_z and input == 's':
-            #plus y direction
-            sys.stdout.flush()
-            y_pos = y_pos + step
-            position['gantry_y'] = y_pos
-            y_move = move_y_axis(step, AXIS_SPEED_Y)
-            await y_move.run(can_messenger = messenger)
-
-        elif input == 'i':
-            sys.stdout.flush()
-            z_pos = z_pos - step
-            position['head_l'] = z_pos
-            z_move = move_z_axis(step, -AXIS_SPEED_Z)
-            await z_move.run(can_messenger = messenger)
-
-        elif input == 'k':
-            sys.stdout.flush()
-            z_pos = z_pos + step
-            position['head_l'] = z_pos
-            z_move = move_z_axis(step, AXIS_SPEED_Z)
-            await z_move.run(can_messenger = messenger)
-
-        elif input == 'q':
-            sys.stdout.flush()
-            print("TEST CANCELLED")
-            quit()
-
-        elif input == '+':
-            sys.stdout.flush()
-            step_length_index = step_length_index + 1
-            if step_length_index >= 5:
-                step_length_index = 5
-            step = step_size[step_length_index]
-
-        elif input == '-':
-            sys.stdout.flush()
-            step_length_index = step_length_index -1
-            if step_length_index <= 0:
-                step_length_index = 0
-            step = step_size[step_length_index]
-
-        elif input == '\r' or input == '\n' or input == '\r\n':
-            sys.stdout.flush()
-            return position
-        print('Coordinates: ', round(position['gantry_x'], 2), ',',
-                                round(position['gantry_y'], 2), ',',
-                                round(position['head_l'], 2), ' Motor Step: ',
-                                step_size[step_length_index],
-                                end = '')
-        print('\r', end='')
-
-
 async def _run(args: argparse.Namespace) -> None:
+    global CURRENT_HAS_TIP
+    global CURRENT_TIP_LENGTH
     driver = await build_driver(build_settings(args))
     messenger = CanMessenger(driver=driver)
     messenger.start()
@@ -508,33 +344,25 @@ async def _run(args: argparse.Namespace) -> None:
         await home_jaw.run(can_messenger=messenger)
         if "y" in input("Pick-up Tips? (y/n): ").lower():
             input("ENTER to hover above tiprack:")
-            z_move = move_z_axis(CAL_DIST_TIP_RACK_FEATURES, -AXIS_SPEED_Z)
-            print("JOG to the TIPRACK")
-            position = {'gantry_x': 0,
-                        'gantry_y': 0,
-                        'head_l': 0}
-            tiprack_pos = await _jog_axis(messenger, position, only_z=True)
-            print("grabbing the tips")
+            await move_z_axis_to(CAL_POS_TIP_RACK_FEATURES, -AXIS_SPEED_Z).run(can_messenger=messenger)
+            input("ENTER to grab the tips")
             await grab_tips.run(can_messenger=messenger)
             input("ENTER to home jaw")
             await home_jaw.run(can_messenger=messenger)
             input('ENTER to home Z')
             await home_z_axis().run(can_messenger=messenger)
-        else:
-            tiprack_pos = {'gantry_x': 0,
-                           'gantry_y': 0,
-                           'head_l': 0}
+        CURRENT_HAS_TIP = True
+        CURRENT_TIP_LENGTH = TIP_LENGTH[test.tip_volume]
         # Prepare for aspirate --bottom
         await set_current(messenger, 1.5, NodeId.pipette_left)
         print('preparing for aspirate')
         await move_plunger(PLUNGER_BOTTOM, 10).run(can_messenger=messenger)
         print('aspirating LEADING-AIR-GAP')
         await move_plunger(trailing_air_gap_mm, 10).run(can_messenger=messenger)
-        print('JOG to the TROUGH')
-        position = {'gantry_x': tiprack_pos['gantry_x'],
-                    'gantry_y': tiprack_pos['gantry_y'],
-                    'head_l': 0}
-        await _jog_axis(messenger, position, only_z=True)
+        input('ENTER to move to TOP of RESERVOIR')
+        await move_z_axis_to(CAL_POS_RESERVOIR_TOP, -AXIS_SPEED_Z).run(can_messenger=messenger)
+        input('ENTER to move to DEAD-VOL in RESERVOIR')
+        await move_z_axis_to(CAL_POS_RESERVOIR_DEAD, -AXIS_SPEED_Z).run(can_messenger=messenger)
         # Aspirate
         if args.pre_wet:
             pre_wet_count = 5
@@ -544,19 +372,21 @@ async def _run(args: argparse.Namespace) -> None:
                 await move_plunger(aspirate_mm, aspirate_speed_mm).run(can_messenger=messenger)
         print(f"aspirating: {aspirate_mm} mm")
         await move_plunger(aspirate_mm, -aspirate_speed_mm).run(can_messenger=messenger)
-        print('JOG to the RETRACT position')
-        await _jog_axis(messenger, position, only_z=True)
-        print('doing a TRAILING-AIR-GAP')
-        await move_plunger(leading_air_gap_mm, -DEFAULT_TRAILING_SPEED_MM).run(can_messenger=messenger)
-        print('JOG to the DISPENSE position')
-        await _jog_axis(messenger, position, only_z=True)
+        input('ENTER to move to TOP of RESERVOIR')
+        await move_z_axis_to(CAL_POS_RESERVOIR_TOP, AXIS_SPEED_Z).run(can_messenger=messenger)
+        input('ENTER to do a TRAILING-AIR-GAP')
+        await move_plunger(leading_air_gap_mm, DEFAULT_TRAILING_SPEED_MM).run(can_messenger=messenger)
+        input('ENTER to move out of the way by 100 mm')
+        await move_z_axis_to(100, AXIS_SPEED_Z).run(can_messenger=messenger)
+        input('ENTER to move down to DISPENSE position')
+        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_200_UL, AXIS_SPEED_Z).run(can_messenger=messenger)
+        input('ENTER to DISPENSE')
         await move_plunger(dispense_mm, dispense_speed_mm).run(can_messenger=messenger)
-        print('JOG to the BLOWOUT position')
-        await _jog_axis(messenger, position, only_z=True)
+        input('ENTER to move to BLOWOUT positon')
+        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_TOP, AXIS_SPEED_Z).run(can_messenger=messenger)
+        input('ENTER to BLOWOUT')
         await move_plunger(blow_out_plunger_distance_mm, dispense_speed_mm).run(can_messenger=messenger)
-        print('JOG to CATCH DROPLETS')
-        await _jog_axis(messenger, position, only_z=True)
-        print('homing Z Axis')
+        input('ENTER to HOME the Z Axis')
         await home_z_axis().run(can_messenger=messenger)
         input('ENTER to DROP-TIPS')
         await drop_tips.run(can_messenger=messenger)
