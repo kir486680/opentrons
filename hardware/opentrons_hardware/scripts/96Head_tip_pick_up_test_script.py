@@ -41,8 +41,9 @@ PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM = 15.904
 PLUNGER_BOTTOM = 66
 PLUNGER_BLOW_OUT = 71
 
-DEFAULT_DISPENSE_SPEED_UL = 150
+DEFAULT_BLOWOUT_SPEED_UL = 80
 DEFAULT_TRAILING_SPEED_MM = 1  # mm/sec
+DEFAULT_PRE_BLOWOUT_DELAY_SECONDS = 5  # wait for droplets to accumulate
 
 GRAB_SPEED = 5.5
 GRAB_DISTANCE = 19
@@ -60,12 +61,16 @@ TIP_LENGTH = {
 CAL_POS_TIP_RACK_FEATURES = 125
 CAL_POS_RESERVOIR_TOP = 218.6  # w/ added tip-length (was 133 using t1000)
 CAL_POS_RESERVOIR_DEAD = CAL_POS_RESERVOIR_TOP + 26  # maybe 0.5mm submerged into inset
-CAL_POS_MVS_TOP_TO_PLATE_200_UL = 242.1
-CAL_POS_MVS_TOP_TO_PLATE_TOP = 236.1
+CAL_POS_MVS_TOP_TO_PLATE_TOP = 235.85
+mvs_well_depth = 10.8
+mvs_200_ul_height = 6.0
+CAL_POS_MVS_TOP_TO_PLATE_200_UL = CAL_POS_MVS_TOP_TO_PLATE_TOP + (mvs_well_depth - mvs_200_ul_height)
 
 CURRENT_Z_POS = 0
 CURRENT_HAS_TIP = False
 CURRENT_TIP_LENGTH = 0
+
+ASPIRATE_DELAY_SECONDS = 0.6
 
 
 @dataclass
@@ -73,6 +78,8 @@ class TestParams:
     tip_volume: int
     aspirate_volume_ul: float
     aspirate_speed_ul_per_sec: float
+    aspirate_delay: float
+    dispense_speed_ul_per_sec: float
     leading_air_gap_ul: float
     trailing_air_gap_ul: float
 
@@ -81,58 +88,80 @@ TESTS = {
     "t50-1ul": TestParams(tip_volume=50,
                           aspirate_volume_ul=1.0,
                           aspirate_speed_ul_per_sec=20.0,
+                          aspirate_delay=0.2,
                           leading_air_gap_ul=15.0,
-                          trailing_air_gap_ul=2.0),
+                          trailing_air_gap_ul=2.0,
+                          dispense_speed_ul_per_sec=6.5),
     "t50-10ul": TestParams(tip_volume=50,
                            aspirate_volume_ul=10.0,
                            aspirate_speed_ul_per_sec=5.7,
+                           aspirate_delay=0.2,
                            leading_air_gap_ul=15.0,
-                           trailing_air_gap_ul=0.1),
+                           trailing_air_gap_ul=0.1,
+                           dispense_speed_ul_per_sec=6.5),
     "t50-50ul": TestParams(tip_volume=50,
                            aspirate_volume_ul=50.0,
                            aspirate_speed_ul_per_sec=44.2,
+                           aspirate_delay=0.2,
                            leading_air_gap_ul=15.0,
-                           trailing_air_gap_ul=0.1),
+                           trailing_air_gap_ul=0.1,
+                           dispense_speed_ul_per_sec=6.5),
     "t200-10ul": TestParams(tip_volume=200,
                             aspirate_volume_ul=10,
                             aspirate_speed_ul_per_sec=12.5,
+                            aspirate_delay=0.5,
                             leading_air_gap_ul=10,
-                            trailing_air_gap_ul=5),
+                            trailing_air_gap_ul=5,
+                            dispense_speed_ul_per_sec=80),
     "t200-50ul": TestParams(tip_volume=200,
                             aspirate_volume_ul=50,
                             aspirate_speed_ul_per_sec=37.5,
+                            aspirate_delay=0.5,
                             leading_air_gap_ul=10,
-                            trailing_air_gap_ul=3.5),
+                            trailing_air_gap_ul=3.5,
+                            dispense_speed_ul_per_sec=80),
     "t200-200ul": TestParams(tip_volume=200,
                              aspirate_volume_ul=200,
                              aspirate_speed_ul_per_sec=150,
+                             aspirate_delay=0.5,
                              leading_air_gap_ul=7.7,
-                             trailing_air_gap_ul=2),
+                             trailing_air_gap_ul=2,
+                             dispense_speed_ul_per_sec=80),
     "t1000-10ul": TestParams(tip_volume=1000,
                              aspirate_volume_ul=10,
                              aspirate_speed_ul_per_sec=22,
+                             aspirate_delay=0.2,
                              leading_air_gap_ul=10,
-                             trailing_air_gap_ul=10),
+                             trailing_air_gap_ul=10,
+                             dispense_speed_ul_per_sec=160),
     "t1000-50ul": TestParams(tip_volume=1000,
                              aspirate_volume_ul=50,
                              aspirate_speed_ul_per_sec=37,
+                             aspirate_delay=0.2,
                              leading_air_gap_ul=10,
-                             trailing_air_gap_ul=10),
+                             trailing_air_gap_ul=10,
+                             dispense_speed_ul_per_sec=160),
     "t1000-200ul": TestParams(tip_volume=1000,
                               aspirate_volume_ul=200,
                               aspirate_speed_ul_per_sec=150,
+                              aspirate_delay=0.2,
                               leading_air_gap_ul=7,
-                              trailing_air_gap_ul=10),
+                              trailing_air_gap_ul=10,
+                              dispense_speed_ul_per_sec=160),
     "t1000-500ul": TestParams(tip_volume=1000,
                               aspirate_volume_ul=500,
                               aspirate_speed_ul_per_sec=150,
+                              aspirate_delay=0.2,
                               leading_air_gap_ul=2,
-                              trailing_air_gap_ul=10),
+                              trailing_air_gap_ul=10,
+                              dispense_speed_ul_per_sec=160),
     "t1000-1000ul": TestParams(tip_volume=1000,
                                aspirate_volume_ul=1000,
                                aspirate_speed_ul_per_sec=150,
+                               aspirate_delay=0.2,
                                leading_air_gap_ul=2,
-                               trailing_air_gap_ul=10),
+                               trailing_air_gap_ul=10,
+                               dispense_speed_ul_per_sec=160),
 }
 
 
@@ -310,8 +339,10 @@ async def _run(args: argparse.Namespace) -> None:
     print(f"tip-ul: {test.tip_volume}")
     print(f"aspirate-ul: {test.aspirate_volume_ul}")
     print(f"aspirate-speed-ul: {test.aspirate_speed_ul_per_sec}")
+    print(f"aspirate-delay-sec: {test.aspirate_delay}")
     print(f"leading-air-gap-ul: {test.leading_air_gap_ul}")
     print(f"trailing-air-gap-ul: {test.trailing_air_gap_ul}")
+    print(f"dispense-speed-ul: {test.dispense_speed_ul_per_sec}")
 
     table = _get_accuracy_adjust_table(test.tip_volume)
     aspirate_mm = _get_plunger_distance_for_volume(table, test.aspirate_volume_ul)
@@ -320,7 +351,8 @@ async def _run(args: argparse.Namespace) -> None:
     leading_air_gap_mm = test.leading_air_gap_ul / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
     trailing_air_gap_mm = test.trailing_air_gap_ul / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
     dispense_mm = leading_air_gap_mm + aspirate_mm + trailing_air_gap_mm
-    dispense_speed_mm = DEFAULT_DISPENSE_SPEED_UL / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
+    dispense_speed_mm = test.dispense_speed_ul_per_sec / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
+    blowout_speed_mm = DEFAULT_BLOWOUT_SPEED_UL / PIPETTE_SINGLE_EVT_IDEAL_UL_PER_MM
     blow_out_plunger_distance_mm = PLUNGER_BLOW_OUT - PLUNGER_BOTTOM
 
     print("----------")
@@ -334,36 +366,40 @@ async def _run(args: argparse.Namespace) -> None:
     print("----------")
 
     try:
-        # only use accuracy-adjustment when moving liquids
-        print('HOMING Z')
+        # HOME
+        print("homing...")
         await home_z_axis().run(can_messenger=messenger)
-        input("ENTER to home PLUNGER")
         await set_current(messenger, 1.5, NodeId.pipette_left)
         await home_pipette.run(can_messenger=messenger)
-        input("ENTER to home JAW")
         await home_jaw.run(can_messenger=messenger)
+
+        # PICK-UP-TIP
         if "y" in input("Pick-up Tips? (y/n): ").lower():
-            input("ENTER to hover above tiprack:")
             await move_z_axis_to(CAL_POS_TIP_RACK_FEATURES, -AXIS_SPEED_Z).run(can_messenger=messenger)
             input("ENTER to grab the tips")
             await grab_tips.run(can_messenger=messenger)
-            input("ENTER to home jaw")
+            CURRENT_HAS_TIP = True
+            CURRENT_TIP_LENGTH = TIP_LENGTH[test.tip_volume]
+            input("ENTER to release tips and HOME jaw")
             await home_jaw.run(can_messenger=messenger)
-            input('ENTER to home Z')
-            await home_z_axis().run(can_messenger=messenger)
-        CURRENT_HAS_TIP = True
-        CURRENT_TIP_LENGTH = TIP_LENGTH[test.tip_volume]
+            input('ENTER to retract Z')
+            await move_z_axis_to(CURRENT_TIP_LENGTH + 1, -AXIS_SPEED_Z).run(can_messenger=messenger)
+        else:
+            CURRENT_HAS_TIP = True
+            CURRENT_TIP_LENGTH = TIP_LENGTH[test.tip_volume]
+
         # Prepare for aspirate --bottom
         await set_current(messenger, 1.5, NodeId.pipette_left)
         print('preparing for aspirate')
         await move_plunger(PLUNGER_BOTTOM, 10).run(can_messenger=messenger)
         print('aspirating LEADING-AIR-GAP')
-        await move_plunger(trailing_air_gap_mm, 10).run(can_messenger=messenger)
-        input('ENTER to move to TOP of RESERVOIR')
+        await move_plunger(leading_air_gap_mm, -10).run(can_messenger=messenger)
+        print('moving to TOP of RESERVOIR')
         await move_z_axis_to(CAL_POS_RESERVOIR_TOP, -AXIS_SPEED_Z).run(can_messenger=messenger)
+
+        # ASPIRATE
         input('ENTER to move to DEAD-VOL in RESERVOIR')
         await move_z_axis_to(CAL_POS_RESERVOIR_DEAD, -AXIS_SPEED_Z).run(can_messenger=messenger)
-        # Aspirate
         if args.pre_wet:
             pre_wet_count = 5
             for i in range(pre_wet_count):
@@ -372,25 +408,38 @@ async def _run(args: argparse.Namespace) -> None:
                 await move_plunger(aspirate_mm, aspirate_speed_mm).run(can_messenger=messenger)
         print(f"aspirating: {aspirate_mm} mm")
         await move_plunger(aspirate_mm, -aspirate_speed_mm).run(can_messenger=messenger)
-        input('ENTER to move to TOP of RESERVOIR')
+        print(f"delaying: {test.aspirate_delay} seconds")
+        await asyncio.sleep(test.aspirate_delay)
+        print('moving to TOP of RESERVOIR')
         await move_z_axis_to(CAL_POS_RESERVOIR_TOP, AXIS_SPEED_Z).run(can_messenger=messenger)
-        input('ENTER to do a TRAILING-AIR-GAP')
-        await move_plunger(leading_air_gap_mm, DEFAULT_TRAILING_SPEED_MM).run(can_messenger=messenger)
-        input('ENTER to move out of the way by 100 mm')
-        await move_z_axis_to(100, AXIS_SPEED_Z).run(can_messenger=messenger)
-        input('ENTER to move down to DISPENSE position')
-        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_200_UL, AXIS_SPEED_Z).run(can_messenger=messenger)
-        input('ENTER to DISPENSE')
+        print(f'doing a TRAILING-AIR-GAP: {trailing_air_gap_mm}')
+        await move_plunger(trailing_air_gap_mm, -DEFAULT_TRAILING_SPEED_MM).run(can_messenger=messenger)
+        print('moving out of the way by 100 mm')
+        await move_z_axis_to(CAL_POS_RESERVOIR_TOP - 100, AXIS_SPEED_Z).run(can_messenger=messenger)
+
+        # DISPENSE
+        input('ENTER to move to ABOVE the plate')
+        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_TOP - 1, AXIS_SPEED_Z).run(can_messenger=messenger)
+        input('ALIGN the plate, then press ENTER')
+        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_200_UL + 1.5, AXIS_SPEED_Z).run(can_messenger=messenger)
+        print(f'dispensing: {dispense_mm} mm')
         await move_plunger(dispense_mm, dispense_speed_mm).run(can_messenger=messenger)
-        input('ENTER to move to BLOWOUT positon')
-        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_TOP, AXIS_SPEED_Z).run(can_messenger=messenger)
-        input('ENTER to BLOWOUT')
-        await move_plunger(blow_out_plunger_distance_mm, dispense_speed_mm).run(can_messenger=messenger)
-        input('ENTER to HOME the Z Axis')
-        await home_z_axis().run(can_messenger=messenger)
+        print('moving to BLOWOUT height in well')
+        await move_z_axis_to(CAL_POS_MVS_TOP_TO_PLATE_TOP + 1, AXIS_SPEED_Z).run(can_messenger=messenger)
+        print('PAUSE before BLOWOUT')
+        await asyncio.sleep(DEFAULT_PRE_BLOWOUT_DELAY_SECONDS)
+        print('doing a BLOWOUT')
+        await move_plunger(blow_out_plunger_distance_mm, blowout_speed_mm).run(can_messenger=messenger)
+        input('ENTER to retract Z')
+        await move_z_axis_to(CURRENT_TIP_LENGTH + 1, -AXIS_SPEED_Z).run(can_messenger=messenger)
+
+        # DROPTIP
         input('ENTER to DROP-TIPS')
         await drop_tips.run(can_messenger=messenger)
         input('ENTER to home JAW')
+        print("retracting plunger")
+        await move_plunger(PLUNGER_BLOW_OUT - 1, -10).run(can_messenger=messenger)
+        print('homing jaw')
         await home_jaw.run(can_messenger=messenger)
     except asyncio.CancelledError:
         pass
