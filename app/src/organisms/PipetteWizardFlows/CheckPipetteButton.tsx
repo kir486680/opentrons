@@ -15,7 +15,7 @@ export const CheckPipetteButton = (
   const { status, refetch } = usePipettesQuery()
 
   React.useEffect(() => {
-    //  if requestStatus is error then the error modal will be in the results page
+    //  if status is error then the error modal will be in the results page
     if (status === 'success' || status === 'error') {
       proceed()
       setPending(false)
