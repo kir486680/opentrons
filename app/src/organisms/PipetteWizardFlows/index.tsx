@@ -283,7 +283,7 @@ export const PipetteWizardFlows = (
     }
     case FLOWS.ATTACH: {
       if (selectedPipette === SINGLE_MOUNT_PIPETTES) {
-        wizardTitle = t('attach_pipette')
+        wizardTitle = startCase(t('attach_pipette', { mount: mount }))
       } else {
         wizardTitle = isGantryEmpty
           ? t('attach_96_channel')
@@ -297,7 +297,7 @@ export const PipetteWizardFlows = (
     }
     case FLOWS.DETACH: {
       if (selectedPipette === SINGLE_MOUNT_PIPETTES) {
-        wizardTitle = t('detach_pipette')
+        wizardTitle = startCase(t('detach_pipette', { mount: mount }))
       } else {
         wizardTitle = t('detach_96_channel')
       }
