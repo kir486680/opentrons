@@ -26,7 +26,7 @@ import {
 import { getIsOnDevice } from '../../redux/config'
 import { StyledText } from '../../atoms/text'
 import { Portal } from '../../App/portal'
-import { SmallButton } from '../../atoms/buttons/ODD'
+import { SmallButton } from '../../atoms/buttons/ODD/SmallButton'
 import { ModalShell } from '../../molecules/Modal'
 import { WizardHeader } from '../../molecules/WizardHeader'
 import { GenericWizardTile } from '../../molecules/GenericWizardTile'
@@ -192,15 +192,9 @@ export const ChoosePipette = (props: ChoosePipetteProps): JSX.Element => {
         <SmallButton
           onClick={proceed}
           textTransform={TEXT_TRANSFORM_CAPITALIZE}
-        >
-          <StyledText
-            fontSize="1.375rem"
-            fontWeight={TYPOGRAPHY.fontWeightSemiBold}
-            padding={SPACING.spacing4}
-          >
-            {t('continue')}
-          </StyledText>
-        </SmallButton>
+          buttonText={t('continue')}
+          buttonType="default"
+        />
       </Flex>
     </Flex>
   ) : (
