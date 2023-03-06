@@ -58,7 +58,6 @@ class DeckHeightValidRange:
 
 
 class CalibrationMethod(Enum):
-    LINEAR_SEARCH = "linear search"
     BINARY_SEARCH = "binary search"
     NONCONTACT_PASS = "noncontact pass"
 
@@ -84,13 +83,6 @@ class InaccurateNonContactSweepError(RuntimeError):
             f"Calibration detected a slot width of {detected_width:.3f}mm "
             f"which is too far from the design width of {nominal_width:.3f}mm"
         )
-
-
-# TODO: we should further investigate and compare the results of the two
-# calibration methods: linear vs binary. We currently will be using the linear
-# search as the default as it has been thoroughly tested by the testing team
-
-# BINARY SEARCH METHODS
 
 
 async def find_edge_binary(
@@ -172,6 +164,8 @@ async def find_edge_binary(
         else:
             LOG.info(f"hit at {interaction_pos}")
             # In this block, we've hit the deck
+            # update the fonud deck value
+            slot_edge_nominal = slot_edge_nominal._replace(z=interaction_pos)
             if copysign(stride, search_direction) == stride:
                 # If we're in our primary direction, the last probe was on the deck,
                 # so we want to continue
@@ -677,7 +671,7 @@ async def _calibrate_mount(
     hcapi: OT3API,
     mount: OT3Mount,
     slot: int = 5,
-    method: CalibrationMethod = CalibrationMethod.LINEAR_SEARCH,
+    method: CalibrationMethod = CalibrationMethod.BINARY_SEARCH,
 ) -> Point:
     """
     Run automatic calibration for the tool attached to the specified mount.
@@ -710,11 +704,7 @@ async def _calibrate_mount(
         LOG.info(f"Found deck at {z_height}mm")
 
         # Perform xy offset search
-        if method == CalibrationMethod.LINEAR_SEARCH:
-            found_center = await find_slot_center_linear(
-                hcapi, mount, nominal_center._replace(z=z_height)
-            )
-        elif method == CalibrationMethod.BINARY_SEARCH:
+        if method == CalibrationMethod.BINARY_SEARCH:
             found_center = await find_slot_center_binary(
                 hcapi, mount, nominal_center._replace(z=z_height)
             )
@@ -762,7 +752,7 @@ async def calibrate_gripper_jaw(
     hcapi: OT3API,
     probe: GripperProbe,
     slot: int = 5,
-    method: CalibrationMethod = CalibrationMethod.LINEAR_SEARCH,
+    method: CalibrationMethod = CalibrationMethod.BINARY_SEARCH,
 ) -> Point:
     """
     Run automatic calibration for gripper jaw.
@@ -803,7 +793,7 @@ async def calibrate_pipette(
     hcapi: OT3API,
     mount: Literal[OT3Mount.LEFT, OT3Mount.RIGHT],
     slot: int = 5,
-    method: CalibrationMethod = CalibrationMethod.LINEAR_SEARCH,
+    method: CalibrationMethod = CalibrationMethod.BINARY_SEARCH,
 ) -> Point:
     """
     Run automatic calibration for pipette.
