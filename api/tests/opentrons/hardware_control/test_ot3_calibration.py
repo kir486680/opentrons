@@ -24,7 +24,6 @@ from opentrons.hardware_control.ot3_calibration import (
     _probe_deck_at,
     _get_calibration_square_position_in_slot,
     InaccurateNonContactSweepError,
-    DeckHeightValidRange,
     DeckNotFoundError,
     Z_PREP_OFFSET,
     EDGES,
