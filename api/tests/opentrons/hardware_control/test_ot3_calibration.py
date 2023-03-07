@@ -182,7 +182,7 @@ async def test_find_edge(
         search_axis,
         search_direction,
     )
-    assert result == search_result
+    assert search_axis.of_point(result) == search_result
     # the first move is in z only to the cal height
     checked_calls = mock_move_to.call_args_list[1:]
     # all other moves should only move in the search axis
@@ -191,193 +191,6 @@ async def test_find_edge(
         assert _other_axis_val(call[0][1], search_axis) == _other_axis_val(
             point, search_axis
         )
-
-
-@pytest.mark.parametrize("search_axis", [OT3Axis.X, OT3Axis.Y])
-@pytest.mark.parametrize("size", step_size)
-@pytest.mark.parametrize("found_height", [deck_missed, deck_touched])
-@pytest.mark.parametrize("in_search_direction", [True, False])
-async def test_take_stride_once(
-    ot3_hardware: ThreadManager[OT3API],
-    mock_capacitive_probe: AsyncMock,
-    mock_probe_deck: AsyncMock,
-    override_cal_config: None,
-    mock_move_to: AsyncMock,
-    search_axis: OT3Axis,
-    size: float,
-    in_search_direction: bool,
-    found_height: float,
-):
-    await ot3_hardware.home()
-    mock_capacitive_probe.side_effect = (found_height,)
-    target = Point(0.0, 0.0, 0.0)
-    valid_range = DeckHeightValidRange(min=-1.0, max=1.0)
-
-    result = await _take_stride(
-        ot3_hardware,
-        OT3Mount.LEFT,
-        search_axis,
-        target,
-        size,
-        size * 3,
-        valid_range,
-        in_search_direction,
-        False,
-    )
-    # probe deck only gets called once
-    probe_loc = search_axis.set_in_point(target, size)
-    mock_probe_deck.assert_called_once_with(
-        ot3_hardware,
-        OT3Mount.LEFT,
-        probe_loc,
-        ot3_hardware.config.calibration.edge_sense.pass_settings,
-    )
-
-    # deck height (z) should update if we ever find the deck during probing
-    if found_height == deck_touched:
-        assert result[0] == probe_loc._replace(z=deck_touched)
-    else:
-        assert result[0] == probe_loc
-
-    # if we're in the search direction, the goal is to find the deck
-    if in_search_direction:
-        goal_reached = found_height == deck_touched
-    else:
-        # otherwise, we want to probe until we miss the deck
-        goal_reached = found_height == deck_missed
-
-    # switch next direction only if goal is reached
-    assert result[1] == -1 if goal_reached else 1
-    assert result[2] == goal_reached
-
-
-@pytest.mark.parametrize("search_axis", [OT3Axis.X, OT3Axis.Y])
-@pytest.mark.parametrize("size", step_size)
-@pytest.mark.parametrize(
-    "in_search_direction,probe_results",
-    [
-        (
-            True,
-            (
-                deck_missed,
-                deck_missed,
-                deck_touched,
-            ),
-        ),
-        (False, (deck_touched, deck_touched, deck_missed)),
-    ],
-)
-async def test_take_multiple_strides_success(
-    ot3_hardware: ThreadManager[OT3API],
-    mock_capacitive_probe: AsyncMock,
-    mock_probe_deck: AsyncMock,
-    override_cal_config: None,
-    mock_move_to: AsyncMock,
-    search_axis: OT3Axis,
-    size: float,
-    in_search_direction: bool,
-    probe_results: Tuple[float, float, float],
-):
-    await ot3_hardware.home()
-    mock_capacitive_probe.side_effect = probe_results
-    target = Point(0.0, 0.0, 0.0)
-    valid_range = DeckHeightValidRange(min=-1.0, max=1.0)
-
-    result = await _take_stride(
-        ot3_hardware,
-        OT3Mount.LEFT,
-        search_axis,
-        target,
-        size,
-        size * 3,
-        valid_range,
-        in_search_direction,
-        True,
-    )
-
-    expected_calls = []
-    probe_loc = target
-    for i, height in enumerate(probe_results):
-        probe_loc = search_axis.set_in_point(probe_loc, size * (i + 1))
-        expected_calls.append(
-            mock_call(
-                ot3_hardware,
-                OT3Mount.LEFT,
-                probe_loc,
-                ot3_hardware.config.calibration.edge_sense.pass_settings,
-            )
-        )
-        # every time we touch deck, we update the z
-        if height == deck_touched:
-            probe_loc = probe_loc._replace(z=height)
-
-    mock_probe_deck.assert_has_calls(expected_calls)
-    assert result[0] == probe_loc
-    # switch next direction since goal is reached
-    assert result[1] == -1
-    # goal reached
-    assert result[2]
-
-
-@pytest.mark.parametrize("search_axis", [OT3Axis.X, OT3Axis.Y])
-@pytest.mark.parametrize("size", step_size)
-@pytest.mark.parametrize(
-    "in_search_direction,probe_results",
-    [
-        (True, (deck_missed, deck_missed, deck_missed)),
-        (False, (deck_touched, deck_touched, deck_touched)),
-    ],
-)
-async def test_take_multiple_strides_fail(
-    ot3_hardware: ThreadManager[OT3API],
-    mock_capacitive_probe: AsyncMock,
-    mock_probe_deck: AsyncMock,
-    override_cal_config: None,
-    mock_move_to: AsyncMock,
-    search_axis: OT3Axis,
-    size: float,
-    in_search_direction: bool,
-    probe_results: Tuple[float, float, float],
-):
-    await ot3_hardware.home()
-    mock_capacitive_probe.side_effect = probe_results
-    target = Point(0.0, 0.0, 0.0)
-    valid_range = DeckHeightValidRange(min=-1.0, max=1.0)
-
-    result = await _take_stride(
-        ot3_hardware,
-        OT3Mount.LEFT,
-        search_axis,
-        target,
-        size,
-        size * 3,
-        valid_range,
-        in_search_direction,
-        True,
-    )
-
-    expected_calls = []
-    probe_loc = target
-    for i, height in enumerate(probe_results):
-        probe_loc = search_axis.set_in_point(probe_loc, size * (i + 1))
-        expected_calls.append(
-            mock_call(
-                ot3_hardware,
-                OT3Mount.LEFT,
-                probe_loc,
-                ot3_hardware.config.calibration.edge_sense.pass_settings,
-            )
-        )
-        # every time we touch deck, we update the z
-        if height == deck_touched:
-            probe_loc = probe_loc._replace(z=height)
-
-    mock_probe_deck.assert_has_calls(expected_calls)
-    assert result[0] == probe_loc
-    # direction never changes
-    assert result[1] == 1
-    # goal not reached
-    assert not result[2]
 
 
 async def test_find_edge_early_trigger(
@@ -453,7 +266,7 @@ async def test_method_enum(
     with patch(
         "opentrons.hardware_control.ot3_calibration.find_slot_center_binary",
         AsyncMock(spec=find_slot_center_binary),
-    ) as linear, patch(
+    ) as binary, patch(
         "opentrons.hardware_control.ot3_calibration._get_calibration_square_position_in_slot",
         Mock(),
     ) as calibration_target, patch(
@@ -469,15 +282,15 @@ async def test_method_enum(
     ) as save_instrument_offset:
         find_deck.return_value = 10
         calibration_target.return_value = Point(0.0, 0.0, 0.0)
-        linear.return_value = Point(1.0, 2.0, 3.0)
+        binary.return_value = Point(1.0, 2.0, 3.0)
         noncontact.return_value = Point(3.0, 4.0, 5.0)
         await ot3_hardware.home()
         binval = await calibrate_pipette(
-            ot3_hardware, OT3Mount.RIGHT, 5, CalibrationMethod.LINEAR_SEARCH
+            ot3_hardware, OT3Mount.RIGHT, 5, CalibrationMethod.BINARY_SEARCH
         )
         reset_instrument_offset.assert_called_once()
         find_deck.assert_called_once()
-        linear.assert_called_once()
+        binary.assert_called_once()
         noncontact.assert_not_called()
         save_instrument_offset.assert_called_once()
         assert binval == Point(-1.0, -2.0, -3.0)
@@ -485,7 +298,7 @@ async def test_method_enum(
         reset_instrument_offset.reset_mock()
         find_deck.reset_mock()
         calibration_target.reset_mock()
-        linear.reset_mock()
+        binary.reset_mock()
         noncontact.reset_mock()
         save_instrument_offset.reset_mock()
 
@@ -494,7 +307,7 @@ async def test_method_enum(
         )
         reset_instrument_offset.assert_called_once()
         find_deck.assert_called_once()
-        linear.assert_not_called()
+        binary.assert_not_called()
         noncontact.assert_called_once()
         save_instrument_offset.assert_called_once()
         assert ncval == Point(-3.0, -4.0, -5.0)
