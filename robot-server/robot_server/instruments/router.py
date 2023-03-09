@@ -1,8 +1,6 @@
 """Instruments routes."""
-import asyncio
 from datetime import datetime
 from typing import Optional, List, Dict
-from anyio import fail_after
 from fastapi import APIRouter, status, Depends, Query
 from typing_extensions import Literal
 
@@ -39,7 +37,6 @@ from .instrument_models import (
 from .update_progress_monitor import (
     UpdateProgressMonitor,
     UpdateIdNotFound,
-    UpdateInfoNotFound,
 )
 from ..errors import ErrorDetails, ErrorBody
 from ..service.dependencies import get_unique_id, get_current_time
@@ -100,6 +97,16 @@ class InvalidUpdateId(ErrorDetails):
 
     id: Literal["InvalidUpdateId"] = "InvalidUpdateId"
     title: str = "No such update ID found."
+
+
+class UpdateInfoNotFound(ErrorDetails):
+    """Error raised when there was no update progress information found."""
+
+    id: Literal["UpdateInfoNotFound"] = "UpdateInfoNotFound"
+    title: str = (
+        "No update progress info received from hardware control. "
+        "Cannot guarantee a successful update."
+    )
 
 
 def _pipette_dict_to_pipette_res(pipette_dict: PipetteDict, mount: Mount) -> Pipette:
@@ -268,20 +275,16 @@ async def update_firmware(
 
     task_runner.run(ot3_hardware.update_instrument_firmware, mount=ot3_mount)
 
-    with fail_after(_UPDATE_STATUS_GETTER_TIMEOUT):
-        # The status of a firmware update process is not immediately available from
-        # hardware control. So we retry a few times until we receive the status.
-        while True:
-            try:
-                update_response = update_progress_monitor.create(
-                    update_id=update_process_id,
-                    created_at=created_at,
-                    mount=mount_to_update,
-                )
-            except UpdateInfoNotFound:
-                await asyncio.sleep(0.5)
-            else:
-                break
+    try:
+        update_response = await update_progress_monitor.create(
+            update_id=update_process_id,
+            created_at=created_at,
+            mount=mount_to_update,
+        )
+    except TimeoutError as e:
+        raise UpdateInfoNotFound(detail=str(e)).as_error(
+            status.HTTP_408_REQUEST_TIMEOUT
+        )
 
     return await PydanticResponse.create(
         content=SimpleBody.construct(data=update_response),

@@ -58,6 +58,10 @@ if TYPE_CHECKING:
     from opentrons.hardware_control.ot3api import OT3API
 
 
+# TODO (spp, 2022-01-17): remove xfail once robot server CI test flow is set up to handle
+#  OT2 vs OT3 tests correctly
+
+
 @pytest.fixture()
 def hardware_api(decoy: Decoy) -> HardwareControlAPI:
     """Get a mock hardware control API."""
@@ -112,8 +116,6 @@ def ot3_hardware_api(decoy: Decoy) -> OT3API:
         return None  # type: ignore[return-value]
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_get_instruments_empty(
@@ -128,8 +130,6 @@ async def test_get_instruments_empty(
     assert result.status_code == 200
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_get_all_attached_instruments(
@@ -274,8 +274,6 @@ async def test_get_ot2_instruments(
     ]
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_update_instrument_firmware(
@@ -323,7 +321,7 @@ async def test_update_instrument_firmware(
         }
     )
     decoy.when(
-        update_progress_monitor.create(
+        await update_progress_monitor.create(
             update_id=update_id,
             created_at=update_resource_created_at,
             mount="left",
@@ -350,8 +348,50 @@ async def test_update_instrument_firmware(
     )
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
+@pytest.mark.xfail
+@pytest.mark.ot3_only
+async def test_update_instrument_firmware_times_out(
+    decoy: Decoy,
+    ot3_hardware_api: OT3API,
+    update_progress_monitor: UpdateProgressMonitor,
+    task_runner: TaskRunner,
+) -> None:
+    """It should raise an UpdateInfoNotAvailable error when timed out trying to fetch status."""
+    update_id = "update-id"
+    update_resource_created_at = datetime(year=2023, month=1, day=1)
+
+    decoy.when(ot3_hardware_api.get_all_attached_instr()).then_return(
+        {
+            OT3Mount.LEFT: get_sample_pipette_dict(
+                name="p10_multi",
+                model=PipetteModel("abc"),
+                pipette_id="my-pipette-id",
+                fw_update_required=True,
+            ),
+        }
+    )
+    decoy.when(ot3_hardware_api.get_firmware_update_progress()).then_return({})
+    decoy.when(
+        await update_progress_monitor.create(
+            update_id=update_id,
+            created_at=update_resource_created_at,
+            mount="left",
+        )
+    ).then_raise(TimeoutError("tick tock"))
+
+    with pytest.raises(ApiError) as exc_info:
+        await update_firmware(
+            request_body=RequestModel(data=UpdateCreate(mount="left")),
+            update_process_id=update_id,
+            created_at=update_resource_created_at,
+            hardware=ot3_hardware_api,
+            task_runner=task_runner,
+            update_progress_monitor=update_progress_monitor,
+        )
+    assert exc_info.value.status_code == 408
+    assert exc_info.value.content["errors"][0]["id"] == "UpdateInfoNotFound"
+
+
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_update_instrument_firmware_without_instrument(
@@ -384,8 +424,6 @@ async def test_update_instrument_firmware_without_instrument(
     assert exc_info.value.content["errors"][0]["id"] == "InstrumentNotFound"
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_update_instrument_firmware_with_conflicting_update(
@@ -431,8 +469,6 @@ async def test_update_instrument_firmware_with_conflicting_update(
     assert exc_info.value.content["errors"][0]["id"] == "UpdateInProgress"
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_update_instrument_firmware_without_update_available(
@@ -470,8 +506,6 @@ async def test_update_instrument_firmware_without_update_available(
     assert exc_info.value.content["errors"][0]["id"] == "NoUpdateAvailable"
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_update_task_error(
@@ -529,8 +563,6 @@ async def test_update_task_error(
         )
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly#
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_get_firmware_update_status(
@@ -560,8 +592,6 @@ async def test_get_firmware_update_status(
     assert update_status.status_code == 200
 
 
-# TODO (spp, 2022-01-17): remove xfail once robot server test flow is set up to handle
-#  OT2 vs OT3 tests correctly
 @pytest.mark.xfail
 @pytest.mark.ot3_only
 async def test_get_firmware_update_status_of_invalid_id(
