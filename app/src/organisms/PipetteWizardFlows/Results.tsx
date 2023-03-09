@@ -8,9 +8,9 @@ import {
 import { NINETY_SIX_CHANNEL } from '@opentrons/shared-data'
 import { PrimaryButton, SecondaryButton } from '../../atoms/buttons'
 import { SimpleWizardBody } from '../../molecules/SimpleWizardBody'
-import { SmallButton } from '../../atoms/buttons/ODD'
 import { SmallButton } from '../../atoms/buttons/ODD/SmallButton'
 import { CheckPipetteButton } from './CheckPipetteButton'
+import { FLOWS } from './constants'
 import type { PipetteWizardStepProps } from './types'
 
 interface ResultsProps extends PipetteWizardStepProps {
@@ -106,16 +106,7 @@ export const Results = (props: ResultsProps): JSX.Element => {
 
   if (!isSuccess && (flowType === FLOWS.ATTACH || flowType === FLOWS.DETACH)) {
     subHeader = numberOfTryAgains > 2 ? t('something_seems_wrong') : undefined
-    button = isOnDevice ? (
-      <SmallButton
-        onClick={handleTryAgain}
-        disabled={isPending}
-        buttonText={t(
-          flowType === FLOWS.ATTACH ? 'try_again' : 'attach_and_retry'
-        )}
-        buttonType="default"
-      />
-    ) : (
+    button = (
       <>
         {isOnDevice ? (
           false
